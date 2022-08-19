@@ -165,4 +165,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: smartdns-${{ matrix.arch }}-static
-          path: "*.ipk"
+          path: "package/openwrt/smartdns*.ipk"
