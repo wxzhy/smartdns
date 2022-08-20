@@ -31,8 +31,6 @@ jobs:
             goarch: all
           - goos: luci-compat
             goarch: all
-          - goos: openwrt
-            goarch: arm_cortex-a7_neon-vfpv4
          
       fail-fast: false
 
