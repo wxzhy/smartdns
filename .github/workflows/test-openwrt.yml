@@ -1,6 +1,9 @@
-name: Build and Release
+name: Test Build Openwrt
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
@@ -23,9 +26,9 @@ jobs:
           - arch: arm_arm1176jzf-s_vfp
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/bcm27xx/bcm2708
             sdk_name: -sdk-bcm27xx-bcm2708_
-          - arch: arm_arm926ej-s
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/at91/legacy
-            sdk_name: -sdk-at91-legacy_
+          #- arch: arm_arm926ej-s    #build openssl failed
+          #  sdk_url_path: https://downloads.openwrt.org/snapshots/targets/at91/legacy
+          #  sdk_name: -sdk-at91-legacy_
           - arch: arm_cortex-a15_neon-vfpv4
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/ipq806x/generic
             sdk_name: -sdk-ipq806x-generic_
@@ -41,9 +44,9 @@ jobs:
           - arch: arm_cortex-a9
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/bcm53xx/generic
             sdk_name: -sdk-bcm53xx-generic_
-          - arch: arm_cortex-a9_neon
-            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/imx6/generic
-            sdk_name: -sdk-imx6_
+          #- arch: arm_cortex-a9_neon
+          #  sdk_url_path: https://downloads.openwrt.org/snapshots/targets/imx6/generic
+          #  sdk_name: -sdk-imx6_
           - arch: arm_cortex-a9_vfpv3
             sdk_url_path: https://downloads.openwrt.org/releases/19.07.2/targets/mvebu/cortexa9
             sdk_name: -sdk-19.07.2-mvebu-cortexa9_
@@ -154,15 +157,26 @@ jobs:
         run: |
           eval "${{ env.SDK_HOME }}/staging_dir/host/bin/ccache -s"
 
-#      - name: Release and Upload Assets
-#        uses: softprops/action-gh-release@v1
+#      - name: Upload To Artifact
+#        uses: actions/upload-artifact@v2
 #        with:
-#          files: "*.ipk"
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          name: smartdns-${{ matrix.arch }}-static
+#          path: "package/openwrt/smartdns*.ipk"
 
-      - name: Upload To Artifact
-        uses: actions/upload-artifact@v2
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "::set-output name=release_tag::$(date +"%Y.%m.%d")-${{github.run_id}}-OpenWrt"
+          touch release.txt
+          echo "同步更新上游代码" >> release.txt
+          echo ${{ github.sha }} >> Release.txt
+          echo "::set-output name=status::success"
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v1
+        if: steps.tag.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: smartdns-${{ matrix.arch }}-static
-          path: "package/openwrt/smartdns*.ipk"
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: ${{ github.workspace }}/openwrt/smartdns*.ipk
