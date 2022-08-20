@@ -93,12 +93,12 @@ if [ ! -d "package/openwrt-upx" ] ; then
 	git clone -b master --depth 1 \
 		https://github.com/kuoruan/openwrt-upx.git package/openwrt-upx
 fi
-./scripts/feeds install -a
+./scripts/feeds install -a -f
 
 make defconfig
 
 make package/${package_name}/clean
-make package/${package_name}/compile LDFLAGS='--static' V=s
+make package/${package_name}/compile LDFLAGS='-static' V=s
 
 cd "$dir"
 find "$sdk_home_dir/bin/" -type f -name "${package_name}*.ipk" -exec cp -f {} "$dir" \;
