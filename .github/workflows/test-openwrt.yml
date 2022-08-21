@@ -7,6 +7,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  get-version:
+    name: get latest version number
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Image
+        id: get-version
+        run: |
+          #获取当前版本号
+          git clone https://github.com/PikuZheng/version_commit_test.git --depth=1 --branch=VERSION_CONTROL version_control
+          cd version_control
+          pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
+          cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
+          echo "CUR_VERSION=$pre_version$cur_version" >> $GITHUB_ENV
+          echo "::set-output name=CUR_VERSION::${{ env.CUR_VERSION }}
   release:
     name: Build for ${{ matrix.arch }}
     runs-on: ubuntu-latest
@@ -148,6 +162,8 @@ jobs:
           ln -sf ~/.ccache "$sdk_home/.ccache"
           echo "SDK_HOME=$sdk_home" >> $GITHUB_ENV
           echo "CONFIG_CCACHE=y" >> $GITHUB_ENV
+          #修改版本号
+          sed -i "s/VER=.*/VER=${{ env.CUR_VERSION }}/" ${{ github.workspace }}/package/openwrt/make_openwrt.sh         
       - name: Build package
         env:
           OPENWRT_GOLANG_COMMIT: ${{ secrets.OPENWRT_GOLANG_COMMIT }}
@@ -166,7 +182,7 @@ jobs:
       - name: Generate release tag
         id: tag
         run: |
-          echo "::set-output name=release_tag::$(date +"%Y.%m.%d")-${{github.run_id}}-OpenWrt"
+          echo "::set-output name=release_tag::${{ env.CUR_VERSION }}-OpenWrt"
           touch release.txt
           echo "同步更新上游代码" >> release.txt
           echo ${{ github.sha }} >> Release.txt
