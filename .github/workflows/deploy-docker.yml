@@ -22,7 +22,7 @@ jobs:
           cd ${{ github.workspace }} 
           sed -i "s/VER=.*/VER=$pre_version$cur_version/" package/build-pkg.sh
           #构建image
-          docker build -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{ github.event.inputs.tag }} -f Dockerfile.alpine .
+          docker build -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:$pre_version$cur_version -f Dockerfile.alpine .
       - name: Login to Registry
         run: docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
       - name: Push Image
