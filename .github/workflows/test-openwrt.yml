@@ -24,7 +24,8 @@ jobs:
           pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
           cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
           echo "CUR_VERSION=$pre_version$cur_version" >> $GITHUB_ENV
-          echo "::set-output name=CUR_VERSION::${{ env.CUR_VERSION }}
+          echo "::set-output name=CUR_VERSION::${{ env.CUR_VERSION }}"
+          echo "current version number is ${{ env.CUR_VERSION }}"
   release:
     name: Build for ${{ matrix.arch }}
     runs-on: ubuntu-latest
