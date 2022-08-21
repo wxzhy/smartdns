@@ -1,12 +1,10 @@
 name: Docker Image CI
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'release tag to dockerhub'
-        required: true
-        default: ''
-        
+  push:
+    branches:
+      - master
+      
 jobs:
   # 构建并上传 Docker镜像
   build: 
@@ -15,11 +13,19 @@ jobs:
       - uses: actions/checkout@v2
       - name: Build Image
         run: |
-          cd ${{ github.workspace }} && \
+          #获取当前版本号
+          git clone https://github.com/PikuZheng/version_commit_test.git --depth=1 --branch=VERSION_CONTROL version_control
+          cd version_control
+          pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
+          cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
+          #修改版本号
+          cd ${{ github.workspace }} 
+          sed -i "s/VER=.*/VER=$pre_version$cur_version/" package/build-pkg.sh
+          #构建image
           docker build -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{ github.event.inputs.tag }} -f Dockerfile.alpine .
       - name: Login to Registry
         run: docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
       - name: Push Image
         run: |
           docker push pikuzheng/smartdns:latest
-          docker push pikuzheng/smartdns:${{ github.event.inputs.tag }}
+          docker push pikuzheng/smartdns:$pre_version$cur_version
