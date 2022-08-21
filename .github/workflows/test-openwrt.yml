@@ -11,11 +11,15 @@ jobs:
     name: get latest version number
     runs-on: ubuntu-latest
     steps:
-      - name: Build Image
-        id: get-version
-        run: |
+    - uses: actions/checkout@v3
+      with:
+        ref: VERSION_CONTROL
+        fetch-depth: 1
+        path: version_control
+    - name: get version
+      id: get-version
+      run: |
           #获取当前版本号
-          git clone https://github.com/PikuZheng/version_commit_test.git --depth=1 --branch=VERSION_CONTROL version_control
           cd version_control
           pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
           cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
