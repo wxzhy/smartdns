@@ -10,7 +10,7 @@ on:
       update-version-number:
         description: 'set to true if you want to update last version number'
         required: false
-        default: false
+        default: 'false'
 jobs:
   get-version:
     name: get latest version number
@@ -70,7 +70,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}/package/
           #修改版本号
-          sed -i "s/VER=.*/VER=${{steps.get-version.outputs.CUR_VERSION}}/" build-pkg.sh
+          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" build-pkg.sh
           # mkdir -p output
           # ./build-pkg.sh --platform $GOOS --arch $GOARCH --filearch $GOARCH-$GOOS --outputdir ${{ github.workspace }}/package/output
           mkdir -p output-static
