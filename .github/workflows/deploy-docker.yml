@@ -10,22 +10,29 @@ jobs:
   build: 
     runs-on: ubuntu-latest # 依赖的环境      
     steps:
-      - uses: actions/checkout@v2
-      - name: Build Image
+      - uses: actions/checkout@v3
+        with:
+          ref: VERSION_CONTROL
+          fetch-depth: 1
+          path: version_control
+      - name: get version
+        id: get-version
         run: |
           #获取当前版本号
-          git clone https://github.com/PikuZheng/version_commit_test.git --depth=1 --branch=VERSION_CONTROL version_control
-          cd version_control
-          pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
-          cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
+          pre_version=$(cat version_control/VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
+          cur_version=$(cat version_control/VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
+          echo "::set-output name=CUR_VERSION::$pre_version$cur_version"
+      - uses: actions/checkout@v3
+      - name: Build Image
+        run: |
           #修改版本号
           cd ${{ github.workspace }} 
-          sed -i "s/VER=.*/VER=$pre_version$cur_version/" package/build-pkg.sh
+          sed -i "s/VER=.*/VER=${{steps.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #构建image
-          docker build -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:$pre_version$cur_version -f Dockerfile.alpine .
+          docker build -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
       - name: Login to Registry
         run: docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
       - name: Push Image
         run: |
           docker push pikuzheng/smartdns:latest
-          docker push pikuzheng/smartdns:$pre_version$cur_version
+          docker push pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}}
