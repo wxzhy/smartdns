@@ -127,13 +127,14 @@ jobs:
     - name: update version
       run: |
           #更新当前版本号
-          pre_version=$(cat version_control/VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
-          cur_version=$(cat version_control/VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
+          cd version_control
+          pre_version=$(cat VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
+          cur_version=$(cat VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
           cur_version=$(($cur_version + 1))
-          sed -i "s/CUR_VERS=.*/CUR_VERS=$cur_version/" version_control/VERSION
+          sed -i "s/CUR_VERS=.*/CUR_VERS=$cur_version/" VERSION
           git config --local user.email "fake@mail.com"
           git config --local user.name "PikuZheng"
-          git add version_control/VERSION
+          git add VERSION
           git commit -m "generate new post from github action" -a
     - name: push changes
       uses: ad-m/github-push-action@master
