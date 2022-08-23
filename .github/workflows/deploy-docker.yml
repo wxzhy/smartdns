@@ -36,7 +36,7 @@ jobs:
           sed -i "s/VER=.*/VER=${{steps.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #构建image
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
-          docker buildx --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
+          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
 #      - name: Login to Registry
 #        run: |
 #          docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
