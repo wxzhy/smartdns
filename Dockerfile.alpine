@@ -12,8 +12,8 @@ RUN apk update && \
     mkdir -p /release/etc/smartdns/ && \
     cp /smartdns/src/smartdns /release/usr/sbin/
 
-# FROM alpine:3.16
-FROM scratch
+FROM alpine:3.16
+# FROM scratch
 # 如果有进入镜像操作的必要，可以使用 busybox:musl 或 alpine。建议根据主机其他容器情况共用基础镜像
 ENV TZ="Asia/Shanghai"
 COPY --from=smartdns-builder /release/ /
