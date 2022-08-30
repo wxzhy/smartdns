@@ -1824,6 +1824,10 @@ static void _dns_server_complete_with_multi_ipaddress(struct dns_request *reques
 		_dns_server_force_dualstack(request);
 	}
 
+	if (request->passthrough && do_reply == 0) {
+		return;
+	}
+
 	_dns_server_post_context_init(&context, request);
 	context.do_cache = 1;
 	context.do_ipset = 1;
@@ -2322,6 +2326,7 @@ static int _dns_server_process_answer_A(struct dns_rrs *rrs, struct dns_request 
 	if (addr[0] == 0 || addr[0] == 127) {
 		/* If half of the servers return the same result, then ignore this address */
 		if (atomic_inc_return(&request->adblock) <= (dns_server_num() / 2 + dns_server_num() % 2)) {
+			request->rcode = DNS_RC_NOERROR;
 			_dns_server_request_release(request);
 			return -1;
 		}
@@ -2398,6 +2403,7 @@ static int _dns_server_process_answer_AAAA(struct dns_rrs *rrs, struct dns_reque
 	if (_dns_server_is_adblock_ipv6(addr) == 0) {
 		/* If half of the servers return the same result, then ignore this address */
 		if (atomic_inc_return(&request->adblock) <= (dns_server_num() / 2 + dns_server_num() % 2)) {
+			request->rcode = DNS_RC_NOERROR;
 			_dns_server_request_release(request);
 			return -1;
 		}

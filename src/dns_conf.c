@@ -1750,8 +1750,8 @@ static int _conf_dhcp_lease_dnsmasq_file(void *data, int argc, char *argv[])
 		return -1;
 	}
 
-	safe_strncpy(dns_conf_dnsmasq_lease_file, argv[1], DNS_MAX_PATH);
-	if (_conf_dhcp_lease_dnsmasq_add(argv[1]) != 0) {
+	conf_get_conf_fullpath(argv[1], dns_conf_dnsmasq_lease_file, sizeof(dns_conf_dnsmasq_lease_file));
+	if (_conf_dhcp_lease_dnsmasq_add(dns_conf_dnsmasq_lease_file) != 0) {
 		return -1;
 	}
 
@@ -2091,6 +2091,15 @@ static int _dns_conf_load_post(void)
 		dns_conf_response_mode = DNS_RESPONSE_MODE_FASTEST_IP;
 		tlog(TLOG_WARN, "force set response to %s as cache size is 0",
 			 dns_conf_response_mode_enum[dns_conf_response_mode].name);
+	}
+
+
+	if ((dns_conf_rr_ttl_min > dns_conf_rr_ttl_max) && dns_conf_rr_ttl_max > 0) {
+		dns_conf_rr_ttl_min = dns_conf_rr_ttl_max;
+	}
+
+	if ((dns_conf_rr_ttl_max < dns_conf_rr_ttl_min) && dns_conf_rr_ttl_max > 0) {
+		dns_conf_rr_ttl_max = dns_conf_rr_ttl_min;
 	}
 
 	if (dns_conf_local_ttl == 0) {
