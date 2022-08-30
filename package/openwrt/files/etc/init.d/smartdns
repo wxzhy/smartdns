@@ -78,36 +78,9 @@ set_main_dns()
 
 stop_main_dns()
 {
-	uci delete dhcp.@dnsmasq[0].port
+	uci delete dhcp.@dnsmasq[0].port 2>/dev/null
 	uci commit dhcp
 	/etc/init.d/dnsmasq restart
-}
-
-set_iptable()
-{
-	local ipv6_server=$1
-	local tcp_server=$2
-
-	IPS="$(ifconfig | grep "inet addr" | grep -v ":127" | grep "Bcast" | awk '{print $2}' | awk -F : '{print $2}')"
-	for IP in $IPS
-	do
-		if [ "$tcp_server" = "1" ]; then
-			iptables -t nat -A PREROUTING -p tcp -d "$IP" --dport 53 -j REDIRECT --to-ports "$SMARTDNS_PORT" >/dev/null 2>&1
-		fi
-		iptables -t nat -A PREROUTING -p udp -d "$IP" --dport 53 -j REDIRECT --to-ports "$SMARTDNS_PORT" >/dev/null 2>&1
-	done
-
-	[ "$ipv6_server" = 0 ] && return
-
-	IPS="$(ifconfig | grep "inet6 addr" | grep -v " fe80::" | grep -v " ::1" | grep "Global" | awk '{print $3}')"
-	for IP in $IPS
-	do
-		if [ "$tcp_server" = "1" ]; then
-			ip6tables -t nat -A PREROUTING -p tcp -d "$IP" --dport 53 -j REDIRECT --to-ports "$SMARTDNS_PORT" >/dev/null 2>&1
-		fi
-		ip6tables -t nat -A PREROUTING -p udp -d "$IP" --dport 53 -j REDIRECT --to-ports "$SMARTDNS_PORT" >/dev/null 2>&1
-	done
-
 }
 
 clear_iptable()
@@ -274,7 +247,8 @@ load_service()
 {
 	local section="$1"
 	args=""
-	dnsmase_lease_file="$(uci get dhcp.@dnsmasq[0].leasefile 2>/dev/null)"
+	dnsmasq_lease_file="$(uci get dhcp.@dnsmasq[0].leasefile 2>/dev/null)"
+	dnsmasq_port="$(uci get dhcp.@dnsmasq[0].port 2>/dev/null)"
 	qtype_soa_list=""
 
 	mkdir -p $SMARTDNS_VAR_CONF_DIR
@@ -301,13 +275,12 @@ load_service()
 	config_get serve_expired "$section" "serve_expired" "0"
 	[ "$serve_expired" = "1" ] && conf_append "serve-expired" "yes"
 
-	SMARTDNS_PORT="$port"
-
 	config_get cache_size "$section" "cache_size" ""
 	[ -z "$cache_size" ] || conf_append "cache-size" "$cache_size"
 
 	config_get resolve_local_hostnames "$section" "resolve_local_hostnames" "1"
-	[ -z "$resolve_local_hostnames" ] || conf_append "dnsmasq-lease-file" "$dnsmase_lease_file"
+	[ "$resolve_local_hostnames" = "1" ] && conf_append "dnsmasq-lease-file" "$dnsmasq_lease_file"
+	[ "$resolve_local_hostnames" = "1" ] && conf_append "dnsmasq-lease-file" "$dnsmasq_lease_file"
 
 	config_get force_aaaa_soa "$section" "force_aaaa_soa" "0"
 	[ "$force_aaaa_soa" = "1" ] && qtype_soa_list="$qtype_soa_list 28"
@@ -339,42 +312,36 @@ load_service()
 	config_get log_file "$section" "log_file" ""
 	[ -z "$log_file" ] || conf_append "log-file" "$log_file"
 
-	config_get redirect "$section" "redirect" "none"
-	config_get old_redirect "$section" "old_redirect" "none"
+	config_get redirect "$section" "redirect" ""
 	config_get old_port "$section" "old_port" "0"
-	config_get old_enabled "$section" "old_enabled" "0"
 
 	[ -z "$qtype_soa_list" ] || conf_append "force-qtype-SOA" "$qtype_soa_list"
 
-	if [ "$old_redirect" != "$redirect" ] || [ "$old_port" != "$SMARTDNS_PORT" ] || [ "$old_enabled" = "1" -a "$enabled" = "0" ]; then
-		[ "$old_redirect" = "none" ] || {
-			[ "$old_port" = "0" ] || clear_iptable "$old_port" "$ipv6_server"
-			[ "$old_redirect" = "dnsmasq-upstream" ] && stop_forward_dnsmasq "$old_port"
+	# upgrade old configuration
+	if [ "$redirect" = "redirect" ] || [ "$redirect" = "dnsmasq-upstream" ] || [ "$redirect" = "none" ]; then
+		clear_iptable "$port"
+		clear_iptable "$old_port"
+		stop_forward_dnsmasq "$port"
+		stop_forward_dnsmasq "$old_port"
+		[ "$redirect" = "none" ] || {
+			uci delete smartdns.@smartdns[0].port="53" 2>/dev/null
+			port="53"
 		}
+		uci delete smartdns.@smartdns[0].redirect 2>/dev/null
+		uci delete smartdns.@smartdns[0].old_redirect 2>/dev/null
+		uci delete smartdns.@smartdns[0].old_enabled 2>/dev/null
 	fi
 
-	[ "$enabled" = "0" ] && [ "$SMARTDNS_PORT" = "53" ] && stop_main_dns 
-	[ "$old_port" != "$SMARTDNS_PORT" ] && [ "$old_port" = "53" ] && stop_main_dns 
+	SMARTDNS_PORT="$port"
+	[ -z "${dnsmasq_port}" ] && dnsmasq_port="53"
+	[ "$old_port" == "53" ] && [ "$dnsmasq_port" = "0" ] && stop_main_dns
 
-	uci delete smartdns.@smartdns[0].old_redirect 2>/dev/null
 	uci delete smartdns.@smartdns[0].old_port 2>/dev/null
-	uci delete smartdns.@smartdns[0].old_enabled 2>/dev/null
-	uci add_list smartdns.@smartdns[0].old_redirect="$redirect" 2>/dev/null
 	uci add_list smartdns.@smartdns[0].old_port="$SMARTDNS_PORT" 2>/dev/null
-	uci add_list smartdns.@smartdns[0].old_enabled="$enabled" 2>/dev/null
 	uci commit smartdns
 
 	[ "$enabled" -gt 0 ] || return 1
-
-	if [ "$redirect" = "redirect" ]; then
-		set_iptable $ipv6_server $tcp_server
-	elif [ "$redirect" = "dnsmasq-upstream" ]; then
-		set_forward_dnsmasq "$SMARTDNS_PORT"
-	fi
-
-	if [ "$SMARTDNS_PORT" = "53" ]; then
-		set_main_dns
-	fi
+	[ "$dnsmasq_port" = "$SMARTDNS_PORT" ] && set_main_dns
 
 	if [ "$ipv6_server" = "1" ]; then
 		conf_append "bind" "[::]:$SMARTDNS_PORT"
