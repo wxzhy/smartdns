@@ -46,8 +46,8 @@ o.rempty      = false
 
 ---- Port
 o = s:taboption("settings", Value, "port", translate("Local Port"), translate("Smartdns local server port"))
-o.placeholder = 6053
-o.default     = 6053
+o.placeholder = 53
+o.default     = 53
 o.datatype    = "port"
 o.rempty      = false
 
@@ -92,18 +92,33 @@ o.cfgvalue    = function(...)
     return Flag.cfgvalue(...) or "0"
 end
 
----- Redirect
-o = s:taboption("settings", ListValue, "redirect", translate("Redirect"), translate("SmartDNS redirect mode"))
-o.placeholder = "none"
-o:value("none", translate("none"))
-o:value("dnsmasq-upstream", translate("Run as dnsmasq upstream server"))
-o:value("redirect", translate("Redirect 53 port to SmartDNS"))
-o.default     = "none"
-o.rempty      = false
-
 ---- cache-size
 o = s:taboption("settings", Value, "cache_size", translate("Cache Size"), translate("DNS domain result cache size"))
 o.rempty      = true
+
+-- cache-size
+o = s:taboption("settings", Flag, "resolve_local_hostnames", translate("Resolve Local Hostnames"), translate("Resolve local hostnames by reading Dnsmasq lease file"));
+o.rmempty     = false
+o.default     = o.enabled
+o.cfgvalue    = function(...)
+    return Flag.cfgvalue(...) or "1"
+end
+
+-- Force AAAA SOA
+o = s:taboption("settings", Flag, "force_aaaa_soa", translate("Force AAAA SOA"), translate("Force AAAA SOA."));
+o.rmempty     = false
+o.default     = o.enabled
+o.cfgvalue    = function(...)
+    return Flag.cfgvalue(...) or "0"
+end
+
+-- Force HTTPS SOA
+o = s:taboption("settings", Flag, "force_https_soa", translate("Force HTTPS SOA"), translate("Force HTTPS SOA."));
+o.rmempty     = false
+o.default     = o.enabled
+o.cfgvalue    = function(...)
+    return Flag.cfgvalue(...) or "0"
+end
 
 ---- rr-ttl
 o = s:taboption("settings", Value, "rr_ttl", translate("Domain TTL"), translate("TTL for all domain result."))
