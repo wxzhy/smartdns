@@ -27,6 +27,7 @@ override CFLAGS += -DBASE_FILE_NAME='"$(notdir $<)"'
 ifdef VER
 override CFLAGS += -DSMARTDNS_VERION='"$(VER)"'
 endif
+CFLAGS += -DFEATURE_CHECK_EDNS
 
 CXXFLAGS=-O2 -g -Wall -std=c++11 
 override CXXFLAGS +=-Iinclude
