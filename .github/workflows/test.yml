@@ -77,6 +77,7 @@ jobs:
           mkdir -p output-static
           ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-static
           #增加 -check-edns
+          if [ "$GOOS" != "luci" ]; then
           mkdir -p output-check-edns
           cat >> Makefile.patch << EOF
           --- Makefile
@@ -92,7 +93,8 @@ jobs:
           EOF
           patch -p0 ../src/Makefile Makefile.patch
           ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-check-edns
-          rename -all -check-edns  ${{ github.workspace }}/package/output-check-edns/*
+          rename "-all" "-check-edns"  ${{ github.workspace }}/package/output-check-edns/*
+          fi
 
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
