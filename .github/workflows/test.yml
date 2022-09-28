@@ -77,7 +77,7 @@ jobs:
           mkdir -p output-static
           ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-static
           #增加 -check-edns
-          if [ "$GOOS" != "luci" ] || [ "$GOOS" != "luci-compat" ]; then
+          if [ "$GOOS" != "luci" ] && [ "$GOOS" != "luci-compat" ]; then
           mkdir -p output-check-edns
           cat >> Makefile.patch << EOF
           --- Makefile
