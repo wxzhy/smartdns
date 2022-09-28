@@ -93,7 +93,7 @@ jobs:
           EOF
           patch -p0 ../src/Makefile Makefile.patch
           ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-check-edns
-          rename "-all" "-check-edns"  ${{ github.workspace }}/package/output-check-edns/*
+          rename "s/-all/-check-edns/"  ${{ github.workspace }}/package/output-check-edns/*
           fi
 
       - name: Upload To Artifact
