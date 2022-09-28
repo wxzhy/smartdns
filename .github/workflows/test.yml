@@ -67,6 +67,7 @@ jobs:
       - name: Build
         continue-on-error: true
         run: |
+          apt install -y rename
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}/package/
           #修改版本号
