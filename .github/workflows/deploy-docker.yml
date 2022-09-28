@@ -37,6 +37,22 @@ jobs:
           #构建image
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
           docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
+          #增加 check-edns分支
+          cat >> Makefile.patch << EOF
+          --- Makefile
+          +++ Makefile
+          @@ -27,6 +27,7 @@
+           ifdef VER
+           override CFLAGS += -DSMARTDNS_VERION='"$(VER)"'
+           endif
+          +override CFLAGS += -DFEATURE_CHECK_EDNS
+          
+           CXXFLAGS=-O2 -g -Wall -std=c++11
+           override CXXFLAGS +=-Iinclude
+          EOF
+          patch -p0 ./src/Makefile Makefile.patch
+          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:check-edns -f Dockerfile.alpine .
+          
 #      - name: Login to Registry
 #        run: |
 #          docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
