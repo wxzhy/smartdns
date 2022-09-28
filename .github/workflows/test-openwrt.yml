@@ -92,11 +92,8 @@ jobs:
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/x86/generic
             sdk_name: -sdk-x86-generic_
           - arch: mips64_octeon
-            sdk_url_path: http://downloads.openwrt.org/releases/18.06.5/targets/octeon/generic
-            sdk_name: -sdk-18.06.5-octeon_
-          - arch: mips64_octeonplus
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/octeon/generic
-            sdk_name: -sdk-octeon_
+            sdk_name: -sdk-octeon-generic_
           - arch: mipsel_24kc
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/ramips/mt7620
             sdk_name: -sdk-ramips-mt7620_
@@ -118,6 +115,12 @@ jobs:
           - arch: x86_64
             sdk_url_path: https://downloads.openwrt.org/snapshots/targets/x86/64
             sdk_name: -sdk-x86-64_
+          - arch: powerpc_464fp
+            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/apm821xx/nand
+            sdk_name: -sdk-apm821xx-nand_
+          - arch: powerpc_8540         
+            sdk_url_path: https://downloads.openwrt.org/snapshots/targets/mpc85xx/generic
+            sdk_name: -sdk-mpc85xx-generic_
           # - arch: arc_arc700
           #   sdk_url_path: https://downloads.openwrt.org/snapshots/targets/arc770/generic
           #   sdk_name: -sdk-arc770-generic_
@@ -127,12 +130,6 @@ jobs:
           # - arch: armeb_xscale
           #   sdk_url_path: https://downloads.openwrt.org/snapshots/targets/ixp4xx/generic
           #   sdk_name: -sdk-ixp4xx-generic_
-          # - arch: powerpc_464fp
-          #   sdk_url_path: https://downloads.openwrt.org/snapshots/targets/apm821xx/nand
-          #   sdk_name: -sdk-apm821xx-nand_
-          # - arch: powerpc_8540
-          #   sdk_url_path: https://downloads.openwrt.org/snapshots/targets/mpc85xx/generic
-          #   sdk_name: -sdk-mpc85xx-generic_
 
     env:
       SDK_URL_PATH: ${{ matrix.sdk_url_path }}
