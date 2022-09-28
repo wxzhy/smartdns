@@ -35,7 +35,7 @@ jobs:
     strategy:
       matrix:
         goos: [debian, openwrt, optware]
-        goarch: [x86, x86_64, mips, arm, aarch64, powerpc, armvirt]
+        goarch: [x86, x86_64, mips, arm, aarch64, armvirt]
         exclude:
           - goarch: x86
             goos: debian
@@ -75,13 +75,31 @@ jobs:
           # ./build-pkg.sh --platform $GOOS --arch $GOARCH --filearch $GOARCH-$GOOS --outputdir ${{ github.workspace }}/package/output
           mkdir -p output-static
           ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-static
+          #增加 -check-edns
+          mkdir -p output-check-edns
+          cat >> Makefile.patch << EOF
+          --- Makefile
+          +++ Makefile
+          @@ -27,6 +27,7 @@
+           ifdef VER
+           override CFLAGS += -DSMARTDNS_VERION='"$(VER)"'
+           endif
+          +override CFLAGS += -DFEATURE_CHECK_EDNS
+          
+           CXXFLAGS=-O2 -g -Wall -std=c++11
+           override CXXFLAGS +=-Iinclude
+          EOF
+          patch -p0 ../src/Makefile Makefile.patch
+          ./build-pkg.sh --platform $GOOS --arch $GOARCH --static --filearch $GOARCH-$GOOS-all --outputdir ${{ github.workspace }}/package/output-check-edns
+          rename -all -check-edns  ${{ github.workspace }}/package/output-check-edns/*
+
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
         with:
-#          name: smartdns-${{ matrix.goos }}-${{ matrix.goarch }}
-#          path: ${{ github.workspace }}/package/output/
-#      - uses: actions/upload-artifact@v2
-#        with:
+          name: smartdns-${{ matrix.goos }}-${{ matrix.goarch }}-check-edns
+          path: ${{ github.workspace }}/package/output-check-edns/
+      - uses: actions/upload-artifact@v2
+        with:
           name: smartdns-${{ matrix.goos }}-${{ matrix.goarch }}-static
           path: ${{ github.workspace }}/package/output-static/
 #      - name: Upload To One Artifact
@@ -111,8 +129,10 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
-          files: ${{ github.workspace }}/package/output-static/*
-
+          files: |
+            ${{ github.workspace }}/package/output-static/*
+            ${{ github.workspace }}/package/output-check-edns/*
+          
   update-version:
     if: ((github.event_name=='workflow_dispatch' && github.event.inputs.update-version-number=='true') || github.event_name=='push')
     name: update latest version number
