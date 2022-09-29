@@ -71,8 +71,8 @@ s#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#
 
 echo "src-link custom $custom_dir" >> feeds.conf
 
-( test -d "feeds/packages/net/$package_name" && \
-	rm -rf "feeds/packages/net/$package_name" ) || true
+#( test -d "feeds/packages/net/$package_name" && \
+#	rm -rf "feeds/packages/net/$package_name" ) || true
 
 # replace golang with version defined in env
 if [ -n "$golang_commit" ] ; then
