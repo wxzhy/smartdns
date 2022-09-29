@@ -86,8 +86,8 @@ fi
 cd "$dir"
 
 mkdir -p "$custom_dir/$package_name"
-cp -r "./*" "$custom_dir/$package_name/"
-cp -r "../../src/*" "$custom_dir/$package_name/src/"
+cp -rH "$dir" "$custom_dir/$package_name"
+cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
 ls -l "$custom_dir/$package_name"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
