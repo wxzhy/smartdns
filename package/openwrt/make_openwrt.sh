@@ -85,7 +85,7 @@ fi
 
 cd "$dir"
 
-mkdir -p "$custom_dir/$package_name"
+mkdir -p "$custom_dir"
 cp -rH "$dir" "$custom_dir/$package_name"
 cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
 ls -l "$custom_dir/$package_name"
