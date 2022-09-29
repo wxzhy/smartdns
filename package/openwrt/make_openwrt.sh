@@ -86,8 +86,9 @@ fi
 cd "$dir"
 
 mkdir -p "$custom_dir/$package_name"
-cp -r "$dir/*" "$custom_dir/$package_name/"
-cp -r "$dir/../../src/*" "$custom_dir/$package_name/src/"
+cp -r "./*" "$custom_dir/$package_name/"
+cp -r "../../src/*" "$custom_dir/$package_name/src/"
+ls -l "$custom_dir/$package_name"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
 sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/Makefile
