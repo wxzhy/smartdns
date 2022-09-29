@@ -82,8 +82,6 @@ jobs:
           ./package/build-pkg.sh --platform optware --arch all --filearch $GOARCH-optware-edns --static --outputdir /workdir/build
           EOF
 
-          ls -l
-          #生成edns补丁
           cat >> Makefile.patch << EOF
           --- Makefile
           +++ Makefile
@@ -96,8 +94,8 @@ jobs:
            CXXFLAGS=-O2 -g -Wall -std=c++11
            override CXXFLAGS +=-Iinclude
           EOF
-          ls -la
-          docker run -i --rm -v $(pwd):/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/build-run.sh
+
+          docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/docker-build.sh
 
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
