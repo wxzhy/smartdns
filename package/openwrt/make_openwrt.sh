@@ -91,6 +91,7 @@ fi
 mkdir -p "$custom_dir"
 cp -rH "$dir" "$custom_dir/$package_name"
 cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
+cp -rH "$dir/../../src" "$custom_dir/$package_name/src/src"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
 
@@ -100,8 +101,6 @@ sed -i "/PKG_SOURCE_PROTO:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
-
-sed -i "MAKE_PATH:=src/d" $custom_dir/$package_name/Makefile
 
 echo "----checkpoint makefile------"
 cat $custom_dir/$package_name/Makefile
