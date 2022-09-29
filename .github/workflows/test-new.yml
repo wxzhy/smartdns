@@ -48,6 +48,7 @@ jobs:
           sudo apt install -y rename
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}/build
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
           
@@ -141,7 +142,7 @@ jobs:
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #单独编译luci和luci-compat
-          ./package/build-pkg.sh --platform $GOARCH --arch all --outputdir ${{ github.workspace }}/build
+          ./package/build-pkg.sh --platform $GOARCH --arch all --filearch $GOARCH-all --outputdir ${{ github.workspace }}/build
 
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
