@@ -88,10 +88,8 @@ if [ -n "$golang_commit" ] ; then
 		tar -xz -C "feeds/packages/lang" --strip=2 "packages-$golang_commit/lang/golang"
 fi
 
-mkdir -p "$custom_dir"
-cp -rH "$dir" "$custom_dir/$package_name"
-cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
-cp -rH "$dir/../../src" "$custom_dir/$package_name/src/src"
+mkdir -p "$custom_dir/$package_name/src/"
+cp -rH "$dir/../../*" "$custom_dir/$package_name/src/"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
 
