@@ -16,6 +16,7 @@ cache_dir=${CACHE_DIR:-"~/cache"}
 
 sdk_url_path=${SDK_URL_PATH:-"https://downloads.openwrt.org/snapshots/targets/x86/64"}
 sdk_name=${SDK_NAME:-"-sdk-x86-64_"}
+
 sdk_home=${SDK_HOME:-"~/sdk"}
 
 sdk_home_dir="$(eval echo "$sdk_home")"
@@ -49,6 +50,8 @@ if ! sha256sum -c ./sha256sums.small >/dev/null 2>&1 ; then
 	fi
 fi
 
+cd "$dir"
+
 file "$sdk_dir/$sdk_file"
 tar -Jxf "$sdk_dir/$sdk_file" -C "$sdk_home_dir" --strip=1
 
@@ -71,8 +74,10 @@ s#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#
 
 echo "src-link custom $custom_dir" >> feeds.conf
 
-#( test -d "feeds/packages/net/$package_name" && \
-#	rm -rf "feeds/packages/net/$package_name" ) || true
+./scripts/feeds update -a
+
+( test -d "feeds/packages/net/$package_name" && \
+	rm -rf "feeds/packages/net/$package_name" ) || true
 
 # replace golang with version defined in env
 if [ -n "$golang_commit" ] ; then
@@ -92,9 +97,7 @@ sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/
 sed -i "/PKG_SOURCE_PROTO:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
-sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
 
-./scripts/feeds update -a
 ./scripts/feeds install -a
 ./scripts/feeds uninstall smartdns
 ./scripts/feeds install -f -p custom smartdns
