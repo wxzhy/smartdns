@@ -96,7 +96,7 @@ jobs:
            override CXXFLAGS +=-Iinclude
           EOF
 
-          docker run -it --rm -v $(pwd):/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/build-run.sh
+          docker run -i --rm -v $(pwd):/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/build-run.sh
 
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
@@ -138,6 +138,7 @@ jobs:
           sudo apt install -y rename
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}/build
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #单独编译luci和luci-compat
