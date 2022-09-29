@@ -93,10 +93,17 @@ cp -rH "$dir" "$custom_dir/$package_name"
 cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
-sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/Makefile
+
+sed -i "s/PKG_SOURCE:=.*/d" $custom_dir/$package_name/Makefile
+sed -i "s/PKG_SOURCE_SUBDIR:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_PROTO:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
+sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
+
+echo "----checkpoint makefile------"
+cat $custom_dir/$package_name/Makefile
+echo "-----------------------------"
 
 ./scripts/feeds install -a
 ./scripts/feeds update custom
