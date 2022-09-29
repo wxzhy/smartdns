@@ -6,6 +6,7 @@
 VER="`date +"1.%Y.%m.%d-%H%M"`"
 
 dir="$(cd "$(dirname "$0")" ; pwd)"
+#dir=/home/runner/work/smartdns/smartdns/package/openwrt
 custom_dir="$(eval echo "~/custom")"
 
 package_name="smartdns"
@@ -85,11 +86,8 @@ fi
 cd "$dir"
 
 mkdir -p "$custom_dir/$package_name"
-echo "$dir"
-ls -l $dir
-cp -r "$dir" "$custom_dir/$package_name"
-ls -l "$custom_dir/$package_name"
-cp -r "$dir/../../src" "$custom_dir/$package_name/src"
+cp -r "$dir/*" "$custom_dir/$package_name/"
+cp -r "$dir/../../src/*" "$custom_dir/$package_name/src/"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
 sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/Makefile
