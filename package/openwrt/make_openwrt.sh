@@ -99,7 +99,7 @@ sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
 
 ./scripts/feeds install -a
-./scripts/feeds uninstall smartdns
+./scripts/feeds update custom
 ./scripts/feeds install -f -p custom smartdns
 
 make defconfig
