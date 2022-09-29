@@ -28,7 +28,6 @@ feeds_dir="$(eval echo "$cache_dir/feeds")"
 test -d "$sdk_dir" || mkdir -p "$sdk_dir"
 test -d "$dl_dir" || mkdir -p "$dl_dir"
 test -d "$feeds_dir" || mkdir -p "$feeds_dir"
-test -d "$custom_dir/$package_name" || mkdir -p "$custom_dir/$package_name"
 
 cd "$sdk_dir"
 
@@ -85,6 +84,7 @@ if [ -n "$golang_commit" ] ; then
 		tar -xz -C "feeds/packages/lang" --strip=2 "packages-$golang_commit/lang/golang"
 fi
 
+mkdir -p "$custom_dir/$package_name"
 ln -sf "$dir" "$custom_dir/$package_name"
 cp -r "$dir/../../src" "$custom_dir/$package_name/src"
 
