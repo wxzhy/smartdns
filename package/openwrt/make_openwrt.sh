@@ -6,7 +6,7 @@
 VER="`date +"1.%Y.%m.%d-%H%M"`"
 
 dir="$(cd "$(dirname "$0")" ; pwd)"
-custom_dir="~/custom"
+custom_dir=$(eval echo "~/custom")
 
 package_name="smartdns"
 golang_commit="$OPENWRT_GOLANG_COMMIT"
@@ -85,7 +85,7 @@ if [ -n "$golang_commit" ] ; then
 fi
 
 mkdir -p "$custom_dir/$package_name"
-ln -sf "$dir" "$custom_dir/$package_name"
+cp -r "$dir/*" "$custom_dir/$package_name/"
 cp -r "$dir/../../src" "$custom_dir/$package_name/src"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
