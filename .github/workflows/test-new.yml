@@ -1,4 +1,4 @@
-name: Test Build
+name: Test Build (new)
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}
           #修改版本号
-          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" build-pkg.sh
+          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
 
           wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1q.tar.gz
           mkdir -p openssl
