@@ -83,12 +83,9 @@ if [ -n "$golang_commit" ] ; then
 		tar -xz -C "feeds/packages/lang" --strip=2 "packages-$golang_commit/lang/golang"
 fi
 
-cd "$dir"
-
 mkdir -p "$custom_dir"
 cp -rH "$dir" "$custom_dir/$package_name"
 cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
-ls -l "$custom_dir/$package_name"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
 sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/Makefile
@@ -96,6 +93,8 @@ sed -i "/PKG_SOURCE_PROTO:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
+
+cd "$sdk_dir"
 
 ./scripts/feeds update -a
 ./scripts/feeds install -a
