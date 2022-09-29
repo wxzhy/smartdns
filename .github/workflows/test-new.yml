@@ -51,36 +51,35 @@ jobs:
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
 
-          wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1q.tar.gz
           mkdir -p openssl
+          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1q.tar.gz
           tar -zxvf OpenSSL_1_1_1q.tar.gz --strip-components 1 -C openssl
 
           cat >> docker-build.sh << EOF
-          ARCH=$GOARCH
           apk add perl make coreutils tar pkgconfig dpkg
           cd /workdir/openssl
-          if [ "$ARCH" == "mipsel" ] || [ "$ARCH" == "mips" ] ;then
+          if [ "$GOARCH" == "mipsel" ] || [ "$GOARCH" == "mips" ] ;then
             ./Configure no-tests linux-mips32
-          elif [ "$ARCH" == "i686" ] ;then
+          elif [ "$GOARCH" == "i686" ] ;then
             ./Configure no-tests linux-x86
-          elif [ "$ARCH" == "powerpc64le" ] ;then
+          elif [ "$GOARCH" == "powerpc64le" ] ;then
             ./Configure no-tests linux-ppc64le
           else
-           ./Configure no-tests linux-$ARCH
+           ./Configure no-tests linux-$GOARCH
           fi
           make all
           cd /workdir
           export CFLAGS="-I /workdir/openssl/include"
           export LDFLAGS="-L /workdir/openssl"
-          ./package/build-pkg.sh --platform debian --arch all --filearch $ARCH-debian --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform linux --arch all --filearch $ARCH-linux --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform openwrt --arch all --filearch $ARCH-openwrt --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform optware --arch all --filearch $ARCH-optware --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform debian --arch all --filearch $GOARCH-debian --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform linux --arch all --filearch $GOARCH-linux --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform openwrt --arch all --filearch $GOARCH-openwrt --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform optware --arch all --filearch $GOARCH-optware --static --outputdir /workdir/build
           patch -p0 src/Makefile Makefile.patch
-          ./package/build-pkg.sh --platform debian --arch all --filearch $ARCH-debian-edns --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform linux --arch all --filearch $ARCH-linux-edns --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform openwrt --arch all --filearch $ARCH-openwrt-edns --static --outputdir /workdir/build
-          ./package/build-pkg.sh --platform optware --arch all --filearch $ARCH-optware-edns --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform debian --arch all --filearch $GOARCH-debian-edns --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform linux --arch all --filearch $GOARCH-linux-edns --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform openwrt --arch all --filearch $GOARCH-openwrt-edns --static --outputdir /workdir/build
+          ./package/build-pkg.sh --platform optware --arch all --filearch $GOARCH-optware-edns --static --outputdir /workdir/build
           EOF
 
           #生成edns补丁
@@ -140,9 +139,9 @@ jobs:
           sudo timedatectl set-timezone "Asia/Shanghai"
           cd ${{ github.workspace }}
           #修改版本号
-          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" build-pkg.sh
+          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #单独编译luci和luci-compat
-          ./build-pkg.sh --platform $GOARCH --arch all --outputdir ${{ github.workspace }}/build
+          ./package/build-pkg.sh --platform $GOARCH --arch all --outputdir ${{ github.workspace }}/build
 
       - name: Upload To Artifact
         uses: actions/upload-artifact@v2
