@@ -6,6 +6,7 @@
 VER="`date +"1.%Y.%m.%d-%H%M"`"
 
 dir="$(cd "$(dirname "$0")" ; pwd)"
+custom_dir="~/custom"
 
 package_name="smartdns"
 golang_commit="$OPENWRT_GOLANG_COMMIT"
@@ -27,6 +28,7 @@ feeds_dir="$(eval echo "$cache_dir/feeds")"
 test -d "$sdk_dir" || mkdir -p "$sdk_dir"
 test -d "$dl_dir" || mkdir -p "$dl_dir"
 test -d "$feeds_dir" || mkdir -p "$feeds_dir"
+test -d "$custom_dir" || mkdir -p "$custom_dir"
 
 cd "$sdk_dir"
 
@@ -69,7 +71,7 @@ s#git.openwrt.org/project/luci#github.com/openwrt/luci#
 s#git.openwrt.org/feed/telephony#github.com/openwrt/telephony#
 ' feeds.conf
 
-./scripts/feeds update -a
+echo "src-link custom $custom_dir" >> feeds.conf
 
 ( test -d "feeds/packages/net/$package_name" && \
 	rm -rf "feeds/packages/net/$package_name" ) || true
@@ -83,13 +85,20 @@ if [ -n "$golang_commit" ] ; then
 		tar -xz -C "feeds/packages/lang" --strip=2 "packages-$golang_commit/lang/golang"
 fi
 
-ln -sf "$dir" "package/$package_name"
-cp -r "$dir/../../src" "package/$package_name/src"
+ln -sf "$dir" "$custom_dir/$package_name"
+cp -r "$dir/../../src" "$custom_dir/$package_name/src"
 
-sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" ./package/$package_name/Makefile
-sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" ./package/$package_name/Makefile
+sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
+sed -i "s/PKG_MIRROR_HASH:=.*/PKG_MIRROR_HASH:=skip/" $custom_dir/$package_name/Makefile
+sed -i "/PKG_SOURCE_PROTO:=.*/d" $custom_dir/$package_name/Makefile
+sed -i "/PKG_SOURCE_URL:=.*/d" $custom_dir/$package_name/Makefile
+sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
+sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
 
-./scripts/feeds install -a -f
+./scripts/feeds update -a
+./scripts/feeds install -a
+./scripts/feeds uninstall smartdns
+./scripts/feeds install -f -p custom smartdns
 
 make defconfig
 
