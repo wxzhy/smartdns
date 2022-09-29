@@ -90,7 +90,8 @@ fi
 
 mkdir -p "$custom_dir"
 cp -rH "$dir" "$custom_dir/$package_name"
-cp -rH "$dir/../../src" "$custom_dir/$package_name/src"
+mkdir -p "$custom_dir/$package_name/src"
+cp -rH "$dir/../../src" "$custom_dir/$package_name/src/src"
 mkdir -p "$custom_dir/$package_name/package"
 cp -rH "$dir" "$custom_dir/$package_name/package/openwrt"
 
@@ -104,7 +105,7 @@ sed -i "/PKG_SOURCE_VERSION:=.*/d" $custom_dir/$package_name/Makefile
 sed -i "/PKG_MIRROR_HASH:=.*/d" $custom_dir/$package_name/Makefile
 
 echo "----checkpoint filetree------"
-tree "$custom_dir/$package_name" -L 2
+tree "$custom_dir/$package_name" -L 3
 echo "-----------------------------"
 
 ./scripts/feeds install -a
