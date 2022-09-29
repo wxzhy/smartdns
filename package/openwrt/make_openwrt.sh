@@ -6,7 +6,7 @@
 VER="`date +"1.%Y.%m.%d-%H%M"`"
 
 dir="$(cd "$(dirname "$0")" ; pwd)"
-custom_dir=$(eval echo "~/custom")
+custom_dir="$(eval echo "~/custom")"
 
 package_name="smartdns"
 golang_commit="$OPENWRT_GOLANG_COMMIT"
@@ -48,8 +48,6 @@ if ! sha256sum -c ./sha256sums.small >/dev/null 2>&1 ; then
 	fi
 fi
 
-cd "$dir"
-
 file "$sdk_dir/$sdk_file"
 tar -Jxf "$sdk_dir/$sdk_file" -C "$sdk_home_dir" --strip=1
 
@@ -84,8 +82,13 @@ if [ -n "$golang_commit" ] ; then
 		tar -xz -C "feeds/packages/lang" --strip=2 "packages-$golang_commit/lang/golang"
 fi
 
+cd "$dir"
+
 mkdir -p "$custom_dir/$package_name"
-cp -r "$dir/*" "$custom_dir/$package_name/"
+echo "$dir"
+ls -l $dir
+cp -r "$dir" "$custom_dir/$package_name"
+ls -l "$custom_dir/$package_name"
 cp -r "$dir/../../src" "$custom_dir/$package_name/src"
 
 sed -i "s/PKG_VERSION:=.*/PKG_VERSION:=$VER/" $custom_dir/$package_name/Makefile
