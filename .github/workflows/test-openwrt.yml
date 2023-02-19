@@ -206,6 +206,6 @@ jobs:
     needs: get-version
     runs-on: ubuntu-latest
     steps:
-      uses: MyAlbum/purge-cache
-      with:
-        max-age: 1
+      - uses: MyAlbum/purge-cache
+        with:
+          max-age: 1
