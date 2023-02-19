@@ -200,12 +200,3 @@ jobs:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           files: ${{ github.workspace }}/package/openwrt/smartdns*.ipk
-
-  clean cache:
-    name: clean cache
-    needs: Build for ${{ matrix.arch }}
-    runs-on: ubuntu-latest
-    steps:
-    - uses: MyAlbum/purge-cache@v1
-      with:
-        max-age: 1
