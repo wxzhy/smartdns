@@ -202,10 +202,10 @@ jobs:
           files: ${{ github.workspace }}/package/openwrt/smartdns*.ipk
 
   clean cache:
-    name: Build for ${{ matrix.arch }}
-    needs: get-version
+    name: clean cache
+    needs: Build for ${{ matrix.arch }}
     runs-on: ubuntu-latest
     steps:
-      - uses: MyAlbum/purge-cache
-        with:
-          max-age: 1
+    - uses: MyAlbum/purge-cache@v1
+      with:
+        max-age: 1
