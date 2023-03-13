@@ -441,7 +441,10 @@ static int _smartdns_init(void)
 		goto errout;
 	}
 
-	tlog_setlogscreen(verbose_screen);
+	if (verbose_screen != 0 || dns_conf_log_console != 0) {
+		tlog_setlogscreen(1);
+	}
+
 	tlog_setlevel(dns_conf_log_level);
 	if (dns_conf_log_file_mode > 0) {
 		tlog_set_permission(tlog_get_root(), dns_conf_log_file_mode, dns_conf_log_file_mode);
@@ -643,7 +646,21 @@ static int _smartdns_init_pre(void)
 	return 0;
 }
 
+#ifdef TEST
+#define smartdns_test_notify(retval) smartdns_test_notify_func(fd_notify, retval)
+static void smartdns_test_notify_func(int fd_notify, uint64_t retval) {
+	/* notify parent kickoff */
+	if (fd_notify > 0) {
+		write(fd_notify, &retval, sizeof(retval));
+	}
+}
+
+int smartdns_main(int argc, char *argv[], int fd_notify);
+int smartdns_main(int argc, char *argv[], int fd_notify) 
+#else
+#define smartdns_test_notify(retval)
 int main(int argc, char *argv[])
+#endif
 {
 	int ret = 0;
 	int is_foreground = 0;
@@ -729,10 +746,11 @@ int main(int argc, char *argv[])
 	}
 
 	atexit(_smartdns_exit);
+	smartdns_test_notify(1);
 
 	return _smartdns_run();
 
 errout:
-
+	smartdns_test_notify(2);
 	return 1;
 }
