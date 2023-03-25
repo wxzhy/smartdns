@@ -844,9 +844,12 @@ static int _dns_rrs_add_all_best_ip(struct dns_server_post_context *context)
 				continue;
 			}
 
-			int ttl_range = request->ping_time + request->ping_time / 10;
-			if ((ttl_range < addr_map->ping_time) && addr_map->ping_time >= 100 && ignore_speed == 0) {
-				continue;
+			/* if ping time is larger than 5ms, check again. */
+			if (addr_map->ping_time - request->ping_time >= 50) {
+				int ttl_range = request->ping_time + request->ping_time / 10 + 5;
+				if ((ttl_range < addr_map->ping_time) && addr_map->ping_time >= 100 && ignore_speed == 0) {
+					continue;
+				}
 			}
 
 			context->ip_num++;
