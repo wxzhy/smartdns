@@ -4703,7 +4703,7 @@ out:
 	return ret;
 }
 
-static void _dns_server_check_ipv6_ready(void)
+void dns_server_check_ipv6_ready(void)
 {
 	static int do_get_conf = 0;
 	static int is_icmp_check_set;
@@ -6234,7 +6234,7 @@ static void _dns_server_period_run_second(void)
 	_dns_server_check_need_exit();
 
 	if (sec % IPV6_READY_CHECK_TIME == 0 && is_ipv6_ready == 0) {
-		_dns_server_check_ipv6_ready();
+		dns_server_check_ipv6_ready();
 	}
 
 	if (sec % 60 == 0) {
@@ -6934,7 +6934,7 @@ int dns_server_init(void)
 		goto errout;
 	}
 
-	_dns_server_check_ipv6_ready();
+	dns_server_check_ipv6_ready();
 	tlog(TLOG_INFO, "%s",
 		 (is_ipv6_ready) ? "IPV6 is ready, enable IPV6 features" : "IPV6 is not ready, disable IPV6 features");
 

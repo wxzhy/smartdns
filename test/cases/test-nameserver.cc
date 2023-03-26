@@ -65,8 +65,8 @@ TEST_F(NameServer, cname)
 
 	server.Start(R"""(bind [::]:60053
 server 127.0.0.1:61053
-server 127.0.0.1:62053 -group g1
-server 127.0.0.1:63053 -group g2
+server 127.0.0.1:62053 -group g1 -exclude-default-group
+server 127.0.0.1:63053 -group g2 -exclude-default-group
 nameserver /a.com/g1
 nameserver /b.com/g2
 log-num 0

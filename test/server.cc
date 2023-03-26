@@ -317,6 +317,7 @@ void Server::StartPost(void *arg)
 
 	if (has_ipv6 == true) {
 		fast_ping_fake_ip_add(PING_TYPE_ICMP, "2001::", 64, 10);
+		dns_server_check_ipv6_ready();
 	}
 }
 
