@@ -44,6 +44,7 @@
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +53,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 #define DNS_MAX_EVENTS 256
 #define IPV6_READY_CHECK_TIME 180
@@ -113,6 +115,7 @@ struct dns_server_conn_head {
 	atomic_t refcnt;
 	const char *dns_group;
 	uint32_t server_flags;
+	struct nftset_ipset_rules *ipset_nftset_rule;
 };
 
 struct dns_server_post_context {
@@ -322,6 +325,9 @@ struct dns_server {
 	int event_fd;
 	struct list_head conn_list;
 
+	pid_t cache_save_pid;
+	time_t cache_save_time;
+
 	/* dns request list */
 	pthread_mutex_t request_list_lock;
 	struct list_head request_list;
@@ -350,6 +356,7 @@ static int _dns_server_reply_all_pending_list(struct dns_request *request, struc
 static void *_dns_server_get_dns_rule(struct dns_request *request, enum domain_rule rule);
 static const char *_dns_server_get_request_groupname(struct dns_request *request);
 static int _dns_server_tcp_socket_send(struct dns_server_conn_tcp_client *tcp_client, void *data, int data_len);
+static int _dns_server_cache_save(int check_lock);
 
 int dns_is_ipv6_ready(void)
 {
@@ -375,6 +382,34 @@ static int _dns_server_has_bind_flag(struct dns_request *request, uint32_t flag)
 	}
 
 	return -1;
+}
+
+static void *_dns_server_get_bind_ipset_nftset_rule(struct dns_request *request, enum domain_rule type)
+{
+	if (request->conn == NULL) {
+		return NULL;
+	}
+
+	if (request->conn->ipset_nftset_rule == NULL) {
+		return NULL;
+	}
+
+	switch (type) {
+	case DOMAIN_RULE_IPSET:
+		return request->conn->ipset_nftset_rule->ipset;
+	case DOMAIN_RULE_IPSET_IPV4:
+		return request->conn->ipset_nftset_rule->ipset_ip;
+	case DOMAIN_RULE_IPSET_IPV6:
+		return request->conn->ipset_nftset_rule->ipset_ip6;
+	case DOMAIN_RULE_NFTSET_IP:
+		return request->conn->ipset_nftset_rule->nftset_ip;
+	case DOMAIN_RULE_NFTSET_IP6:
+		return request->conn->ipset_nftset_rule->nftset_ip6;
+	default:
+		break;
+	}
+
+	return NULL;
 }
 
 static int _dns_server_get_reply_ttl(struct dns_request *request, int ttl)
@@ -1611,10 +1646,17 @@ static int _dns_server_setup_ipset_nftset_packet(struct dns_server_post_context 
 	rule_flags = _dns_server_get_dns_rule(request, DOMAIN_RULE_FLAGS);
 	if (!rule_flags || (rule_flags->flags & DOMAIN_FLAG_IPSET_IGN) == 0) {
 		ipset_rule = _dns_server_get_dns_rule(request, DOMAIN_RULE_IPSET);
+		if (ipset_rule == NULL) {
+			ipset_rule = _dns_server_get_bind_ipset_nftset_rule(request, DOMAIN_RULE_IPSET);
+		}
 	}
 
 	if (!rule_flags || (rule_flags->flags & DOMAIN_FLAG_IPSET_IPV4_IGN) == 0) {
 		ipset_rule_v4 = _dns_server_get_dns_rule(request, DOMAIN_RULE_IPSET_IPV4);
+		if (ipset_rule_v4 == NULL) {
+			ipset_rule_v4 = _dns_server_get_bind_ipset_nftset_rule(request, DOMAIN_RULE_IPSET_IPV4);
+		}
+
 		if (ipset_rule == NULL && check_no_speed_rule && dns_conf_ipset_no_speed.ipv4_enable) {
 			ipset_rule_v4 = &dns_conf_ipset_no_speed.ipv4;
 		}
@@ -1622,6 +1664,10 @@ static int _dns_server_setup_ipset_nftset_packet(struct dns_server_post_context 
 
 	if (!rule_flags || (rule_flags->flags & DOMAIN_FLAG_IPSET_IPV6_IGN) == 0) {
 		ipset_rule_v6 = _dns_server_get_dns_rule(request, DOMAIN_RULE_IPSET_IPV6);
+		if (ipset_rule_v6 == NULL) {
+			ipset_rule_v6 = _dns_server_get_bind_ipset_nftset_rule(request, DOMAIN_RULE_IPSET_IPV6);
+		}
+
 		if (ipset_rule_v6 == NULL && check_no_speed_rule && dns_conf_ipset_no_speed.ipv6_enable) {
 			ipset_rule_v6 = &dns_conf_ipset_no_speed.ipv6;
 		}
@@ -1629,6 +1675,10 @@ static int _dns_server_setup_ipset_nftset_packet(struct dns_server_post_context 
 
 	if (!rule_flags || (rule_flags->flags & DOMAIN_FLAG_NFTSET_IP_IGN) == 0) {
 		nftset_ip = _dns_server_get_dns_rule(request, DOMAIN_RULE_NFTSET_IP);
+		if (nftset_ip == NULL) {
+			nftset_ip = _dns_server_get_bind_ipset_nftset_rule(request, DOMAIN_RULE_NFTSET_IP);
+		}
+
 		if (nftset_ip == NULL && check_no_speed_rule && dns_conf_nftset_no_speed.ip_enable) {
 			nftset_ip = &dns_conf_nftset_no_speed.ip;
 		}
@@ -1636,6 +1686,11 @@ static int _dns_server_setup_ipset_nftset_packet(struct dns_server_post_context 
 
 	if (!rule_flags || (rule_flags->flags & DOMAIN_FLAG_NFTSET_IP6_IGN) == 0) {
 		nftset_ip6 = _dns_server_get_dns_rule(request, DOMAIN_RULE_NFTSET_IP6);
+
+		if (nftset_ip6 == NULL) {
+			nftset_ip6 = _dns_server_get_bind_ipset_nftset_rule(request, DOMAIN_RULE_NFTSET_IP6);
+		}
+
 		if (nftset_ip6 == NULL && check_no_speed_rule && dns_conf_nftset_no_speed.ip6_enable) {
 			nftset_ip6 = &dns_conf_nftset_no_speed.ip6;
 		}
@@ -5543,6 +5598,8 @@ static int _dns_server_tcp_accept(struct dns_server_conn_tcp_server *tcpserver, 
 	tcpclient->head.type = DNS_CONN_TYPE_TCP_CLIENT;
 	tcpclient->head.server_flags = tcpserver->head.server_flags;
 	tcpclient->head.dns_group = tcpserver->head.dns_group;
+	tcpclient->head.ipset_nftset_rule = tcpserver->head.ipset_nftset_rule;
+
 	atomic_set(&tcpclient->head.refcnt, 0);
 	memcpy(&tcpclient->addr, &addr, addr_len);
 	tcpclient->addr_len = addr_len;
@@ -5979,6 +6036,8 @@ static int _dns_server_tls_accept(struct dns_server_conn_tls_server *tls_server,
 	tls_client->head.type = DNS_CONN_TYPE_TLS_CLIENT;
 	tls_client->head.server_flags = tls_server->head.server_flags;
 	tls_client->head.dns_group = tls_server->head.dns_group;
+	tls_client->head.ipset_nftset_rule = tls_server->head.ipset_nftset_rule;
+
 	atomic_set(&tls_client->head.refcnt, 0);
 	memcpy(&tls_client->addr, &addr, addr_len);
 	tls_client->addr_len = addr_len;
@@ -6252,6 +6311,66 @@ static void _dns_server_check_need_exit(void)
 #define _dns_server_check_need_exit()
 #endif
 
+static void _dns_server_save_cache_to_file(void)
+{
+	time_t now;
+	int check_time = dns_conf_cache_checkpoint_time;
+
+	if (dns_conf_cache_persist == 0 || dns_conf_cachesize <= 0 || dns_conf_cache_checkpoint_time <= 0) {
+		return;
+	}
+
+	time(&now);
+	if (server.cache_save_pid > 0) {
+		int ret = waitpid(server.cache_save_pid, NULL, WNOHANG);
+		if (ret == server.cache_save_pid) {
+			server.cache_save_pid = 0;
+		} else if (ret < 0) {
+			tlog(TLOG_ERROR, "waitpid failed, errno %d, error info '%s'", errno, strerror(errno));
+			server.cache_save_pid = 0;
+		} else {
+			if (now - 30 > server.cache_save_time) {
+				kill(server.cache_save_pid, SIGKILL);
+			}
+			return;
+		}
+	}
+
+	if (check_time < 120) {
+		check_time = 120;
+	}
+
+	if (now - check_time < server.cache_save_time) {
+		return;
+	}
+
+	/* server is busy, skip*/
+	pthread_mutex_lock(&server.request_list_lock);
+	if (list_empty(&server.request_list) != 0) {
+		pthread_mutex_unlock(&server.request_list_lock);
+		return;
+	}
+	pthread_mutex_unlock(&server.request_list_lock);
+
+	server.cache_save_time = now;
+
+	int pid = fork();
+	if (pid == 0) {
+		/* child process */
+		for (int i = 3; i < 1024; i++) {
+			close(i);
+		}
+
+		_dns_server_cache_save(1);
+		_exit(0);
+	} else if (pid < 0) {
+		tlog(TLOG_DEBUG, "fork failed, errno %d, error info '%s'", errno, strerror(errno));
+		return;
+	}
+
+	server.cache_save_pid = pid;
+}
+
 static void _dns_server_period_run_second(void)
 {
 	static unsigned int sec = 0;
@@ -6305,6 +6424,8 @@ static void _dns_server_period_run_second(void)
 			tlog(TLOG_INFO, "Update host file data");
 		}
 	}
+
+	_dns_server_save_cache_to_file();
 }
 
 static void _dns_server_period_run(unsigned int msec)
@@ -6620,6 +6741,7 @@ static int _dns_server_set_flags(struct dns_server_conn_head *head, struct dns_b
 	time(&head->last_request_time);
 	head->server_flags = bind_ip->flags;
 	head->dns_group = bind_ip->group;
+	head->ipset_nftset_rule = &bind_ip->nftset_ipset_rule;
 	atomic_set(&head->refcnt, 0);
 	list_add(&head->list, &server.conn_list);
 
@@ -6902,7 +7024,7 @@ static int _dns_server_cache_init(void)
 	return 0;
 }
 
-static int _dns_server_cache_save(void)
+static int _dns_server_cache_save(int check_lock)
 {
 	char *dns_cache_file = SMARTDNS_CACHE_FILE;
 	if (dns_conf_cache_file[0] != 0) {
@@ -6916,7 +7038,7 @@ static int _dns_server_cache_save(void)
 		return 0;
 	}
 
-	if (dns_cache_save(dns_cache_file) != 0) {
+	if (dns_cache_save(dns_cache_file, check_lock) != 0) {
 		tlog(TLOG_WARN, "save cache failed.");
 		return -1;
 	}
@@ -6974,6 +7096,7 @@ int dns_server_init(void)
 	memset(&server, 0, sizeof(server));
 	pthread_attr_init(&attr);
 	INIT_LIST_HEAD(&server.conn_list);
+	time(&server.cache_save_time);
 
 	epollfd = epoll_create1(EPOLL_CLOEXEC);
 	if (epollfd < 0) {
@@ -7034,8 +7157,14 @@ void dns_server_exit(void)
 		close(server.event_fd);
 		server.event_fd = -1;
 	}
+
+	if (server.cache_save_pid > 0) {
+		kill(server.cache_save_pid, SIGKILL);
+		server.cache_save_pid = 0;
+	}
+
 	_dns_server_close_socket();
-	_dns_server_cache_save();
+	_dns_server_cache_save(0);
 	_dns_server_request_remove_all();
 	pthread_mutex_destroy(&server.request_list_lock);
 	dns_cache_destroy();
