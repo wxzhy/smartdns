@@ -1784,8 +1784,8 @@ tlog_log *tlog_open(const char *logfile, int maxlogsize, int maxlogcount, int bu
     log->segment_log = ((flag & TLOG_SEGMENT) == 0) ? 0 : 1;
     log->max_line_size = TLOG_MAX_LINE_LEN;
     log->output_func = _tlog_write;
-    log->file_perm = S_IRUSR | S_IWUSR | S_IRGRP;
-    log->archive_perm = S_IRUSR | S_IRGRP;
+    log->file_perm = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+    log->archive_perm = S_IRUSR | S_IRGRP | S_IROTH;
 
     if (log->nocompress == 0 && tlog.gzip_cmd[0] == '\0') {
         log->nocompress = 1;
