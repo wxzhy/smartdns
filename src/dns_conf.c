@@ -31,7 +31,6 @@
 #include <unistd.h>
 
 #define DNS_MAX_REPLY_IP_NUM 8
-#define DNS_RESOLV_FILE "/etc/resolv.conf"
 
 /* ipset */
 struct dns_ipset_table {
@@ -3308,18 +3307,20 @@ static int _config_log_level(void *data, int argc, char *argv[])
 	/* read log level and set */
 	char *value = argv[1];
 
-	if (strncmp("debug", value, MAX_LINE_LEN) == 0) {
+	if (strncasecmp("debug", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_DEBUG;
-	} else if (strncmp("info", value, MAX_LINE_LEN) == 0) {
+	} else if (strncasecmp("info", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_INFO;
-	} else if (strncmp("notice", value, MAX_LINE_LEN) == 0) {
+	} else if (strncasecmp("notice", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_NOTICE;
-	} else if (strncmp("warn", value, MAX_LINE_LEN) == 0) {
+	} else if (strncasecmp("warn", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_WARN;
-	} else if (strncmp("error", value, MAX_LINE_LEN) == 0) {
+	} else if (strncasecmp("error", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_ERROR;
-	} else if (strncmp("fatal", value, MAX_LINE_LEN) == 0) {
+	} else if (strncasecmp("fatal", value, MAX_LINE_LEN) == 0) {
 		dns_conf_log_level = TLOG_FATAL;
+	} else if (strncasecmp("off", value, MAX_LINE_LEN) == 0) {
+		dns_conf_log_level = TLOG_OFF;
 	} else {
 		return -1;
 	}
@@ -3505,6 +3506,15 @@ int config_additional_file(void *data, int argc, char *argv[])
 	}
 
 	return load_conf(file_path, _config_item, _conf_printf);
+}
+
+const char *dns_conf_get_cache_dir(void)
+{
+	if (dns_conf_cache_file[0] == '\0') {
+		return SMARTDNS_CACHE_FILE;
+	}
+
+	return dns_conf_cache_file;
 }
 
 static int _dns_server_load_conf_init(void)

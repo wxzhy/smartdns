@@ -60,8 +60,10 @@ extern "C" {
 #define SMARTDNS_CONF_FILE "/etc/smartdns/smartdns.conf"
 #define SMARTDNS_LOG_FILE "/var/log/smartdns/smartdns.log"
 #define SMARTDNS_AUDIT_FILE "/var/log/smartdns/smartdns-audit.log"
-#define SMARTDNS_CACHE_FILE "/tmp/smartdns.cache"
+#define SMARTDNS_CACHE_FILE "/var/cache/smartdns/smartdns.cache"
+#define SMARTDNS_TMP_CACHE_FILE "/tmp/smartdns.cache"
 #define SMARTDNS_DEBUG_DIR "/tmp/smartdns"
+#define DNS_RESOLV_FILE "/etc/resolv.conf"
 
 enum domain_rule {
 	DOMAIN_RULE_FLAGS = 0,
@@ -527,6 +529,9 @@ int dns_server_check_update_hosts(void);
 struct dns_proxy_names *dns_server_get_proxy_nams(const char *proxyname);
 
 extern int config_additional_file(void *data, int argc, char *argv[]);
+
+const char *dns_conf_get_cache_dir(void);
+
 #ifdef __cplusplus
 }
 #endif
