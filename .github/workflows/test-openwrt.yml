@@ -185,7 +185,7 @@ jobs:
       - name: Generate release tag
         id: tag
         run: |
-          echo "release_tag=${{needs.get-version.outputs.CUR_VERSION}}-OpenWrt" >> $GITHUB_OUTPUT
+          echo "release_tag=${{needs.get-version.outputs.CUR_VERSION}}-OpenWrt-openssl3" >> $GITHUB_OUTPUT
           touch release.txt
           echo "同步更新上游代码" >> release.txt
           echo ${{ github.sha }} >> Release.txt
