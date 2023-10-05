@@ -1355,7 +1355,7 @@ static int _dns_server_request_update_cache(struct dns_request *request, dns_typ
 	return 0;
 errout:
 	if (cache_data) {
-		dns_cache_data_free(cache_data);
+		dns_cache_data_put(cache_data);
 	}
 	return -1;
 }
@@ -1499,7 +1499,7 @@ static int _dns_cache_cname_packet(struct dns_server_post_context *context)
 	return 0;
 errout:
 	if (cache_packet) {
-		dns_cache_data_free(cache_packet);
+		dns_cache_data_put((struct dns_cache_data *)cache_packet);
 	}
 
 	return -1;
@@ -1539,7 +1539,7 @@ static int _dns_cache_packet(struct dns_server_post_context *context)
 	return 0;
 errout:
 	if (cache_packet) {
-		dns_cache_data_free(cache_packet);
+		dns_cache_data_put((struct dns_cache_data *)cache_packet);
 	}
 
 	return -1;
@@ -4233,6 +4233,10 @@ static int _dns_server_pre_process_rule_flags(struct dns_request *request)
 			goto skip_soa_out;
 		}
 
+		if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV4] != NULL) {
+			goto skip_soa_out;
+		}
+
 		if (_dns_server_is_return_soa(request)) {
 			/* return SOA for A request */
 			if (_dns_server_is_return_soa_qtype(request, DNS_T_AAAA)) {
@@ -4244,6 +4248,10 @@ static int _dns_server_pre_process_rule_flags(struct dns_request *request)
 	case DNS_T_AAAA:
 		if (flags & DOMAIN_FLAG_ADDR_IPV6_IGN) {
 			/* ignore this domain for A request */
+			goto skip_soa_out;
+		}
+
+		if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV6] != NULL) {
 			goto skip_soa_out;
 		}
 
@@ -4889,11 +4897,16 @@ errout:
 
 static int _dns_server_process_cache_packet(struct dns_request *request, struct dns_cache *dns_cache)
 {
+	int ret = -1;
 	struct dns_cache_packet *cache_packet = (struct dns_cache_packet *)dns_cache_get_data(dns_cache);
+	if (cache_packet == NULL) {
+		goto out;
+	}
+
 	int do_ipset = (dns_cache_get_ttl(dns_cache) == 0);
 
 	if (cache_packet->head.cache_type != CACHE_TYPE_PACKET) {
-		return -1;
+		goto out;
 	}
 
 	if (dns_cache_is_visited(dns_cache) == 0) {
@@ -4901,7 +4914,7 @@ static int _dns_server_process_cache_packet(struct dns_request *request, struct 
 	}
 
 	if (dns_cache->info.qtype != request->qtype) {
-		return -1;
+		goto out;
 	}
 
 	struct dns_server_post_context context;
@@ -4912,7 +4925,7 @@ static int _dns_server_process_cache_packet(struct dns_request *request, struct 
 
 	if (dns_decode(context.packet, context.packet_maxlen, cache_packet->data, cache_packet->head.size) != 0) {
 		tlog(TLOG_ERROR, "decode cache failed, %d, %d", context.packet_maxlen, context.inpacket_len);
-		return -1;
+		goto out;
 	}
 
 	request->rcode = context.packet->head.rcode;
@@ -4921,7 +4934,13 @@ static int _dns_server_process_cache_packet(struct dns_request *request, struct 
 	context.do_audit = 1;
 	context.do_reply = 1;
 	context.reply_ttl = _dns_server_get_expired_ttl_reply(dns_cache);
-	return _dns_server_reply_passthrough(&context);
+	ret = _dns_server_reply_passthrough(&context);
+out:
+	if (cache_packet) {
+		dns_cache_data_put((struct dns_cache_data *)cache_packet);
+	}
+
+	return ret;
 }
 
 static int _dns_server_process_cache_data(struct dns_request *request, struct dns_cache *dns_cache)
