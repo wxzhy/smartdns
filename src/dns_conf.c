@@ -504,7 +504,9 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 	unsigned char *spki = NULL;
 	int drop_packet_latency_ms = 0;
 	int is_bootstrap_dns = 0;
-	int is_hostip_set = 0;
+	char host_ip[DNS_MAX_IPLEN] = {0};
+	int no_tls_host_name = 0;
+	int no_tls_host_verify = 0;
 
 	int ttl = 0;
 	/* clang-format off */
@@ -576,14 +578,6 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		}
 	}
 
-	if (type == DNS_SERVER_HTTPS) {
-		safe_strncpy(server->hostname, server->server, sizeof(server->hostname));
-		safe_strncpy(server->httphost, server->server, sizeof(server->httphost));
-		if (server->path[0] == 0) {
-			safe_strncpy(server->path, "/", sizeof(server->path));
-		}
-	}
-
 	/* if port is not defined, set port to default 53 */
 	if (port == PORT_NOT_DEFINED) {
 		port = default_port;
@@ -624,6 +618,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 
 		case 'k': {
 			server->skip_check_cert = 1;
+			no_tls_host_verify = 1;
 			break;
 		}
 		case 'b': {
@@ -655,10 +650,10 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 			break;
 		}
 		case 258: {
-			if (check_is_ipaddr(server->server) != 0) {
-				_conf_domain_rule_address(server->server, optarg);
-				is_hostip_set = 1;
+			if (check_is_ipaddr(optarg) != 0) {
+				goto errout;
 			}
+			safe_strncpy(host_ip, optarg, DNS_MAX_IPLEN);
 			break;
 		}
 		case 259: {
@@ -669,6 +664,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 			safe_strncpy(server->hostname, optarg, DNS_MAX_CNAME_LEN);
 			if (strncmp(server->hostname, "-", 2) == 0) {
 				server->hostname[0] = '\0';
+				no_tls_host_name = 1;
 			}
 			break;
 		}
@@ -678,6 +674,10 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		}
 		case 262: {
 			safe_strncpy(server->tls_host_verify, optarg, DNS_MAX_CNAME_LEN);
+			if (strncmp(server->tls_host_verify, "-", 2) == 0) {
+				server->tls_host_verify[0] = '\0';
+				no_tls_host_verify = 1;
+			}
 			break;
 		}
 		default:
@@ -686,21 +686,28 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		}
 	}
 
-	/* if server is domain name, then verify domain */
-	if (server->tls_host_verify[0] == '\0' && check_is_ipaddr(server->server) != 0) {
-		safe_strncpy(server->tls_host_verify, server->server, DNS_MAX_CNAME_LEN);
+	if (check_is_ipaddr(server->server) != 0) {
+		/* if server is domain name, then verify domain */
+		if (server->tls_host_verify[0] == '\0' && no_tls_host_verify == 0) {
+			safe_strncpy(server->tls_host_verify, server->server, DNS_MAX_CNAME_LEN);
+		}
+
+		if (server->hostname[0] == '\0' && no_tls_host_name == 0) {
+			safe_strncpy(server->hostname, server->server, DNS_MAX_CNAME_LEN);
+		}
+
+		if (server->httphost[0] == '\0') {
+			safe_strncpy(server->httphost, server->server, DNS_MAX_CNAME_LEN);
+		}
+
+		if (host_ip[0] != '\0') {
+			safe_strncpy(server->server, host_ip, DNS_MAX_IPLEN);
+		}
 	}
 
-	/* update address rules for host-ip */
-	if (is_hostip_set == 1) {
-		struct dns_domain_rule *rule = _config_domain_rule_get(server->server);
-		if (rule) {
-			if (rule->rules[DOMAIN_RULE_ADDRESS_IPV4] != NULL && rule->rules[DOMAIN_RULE_ADDRESS_IPV6] == NULL) {
-				_conf_domain_rule_address(server->server, "#6");
-			} else if (rule->rules[DOMAIN_RULE_ADDRESS_IPV4] == NULL && rule->rules[DOMAIN_RULE_ADDRESS_IPV6] != NULL) {
-				_conf_domain_rule_address(server->server, "#4");
-			}
-		}
+	/* if server is domain name, then verify domain */
+	if (server->tls_host_verify[0] == '\0' && server->hostname[0] != '\0' && no_tls_host_verify == 0) {
+		safe_strncpy(server->tls_host_verify, server->hostname, DNS_MAX_CNAME_LEN);
 	}
 
 	/* add new server */
@@ -915,7 +922,7 @@ static int _config_setup_domain_key(const char *domain, char *domain_key, int do
 	return 0;
 }
 
-static struct dns_domain_rule *_config_domain_rule_get(const char *domain)
+static __attribute__((unused)) struct dns_domain_rule *_config_domain_rule_get(const char *domain)
 {
 	char domain_key[DNS_MAX_CONF_CNAME_LEN];
 	int len = 0;
@@ -2211,7 +2218,7 @@ static int _config_bind_ip(int argc, char *argv[], DNS_BIND_TYPE type)
 	bind_ip->flags = server_flag;
 	bind_ip->group = group;
 	dns_conf_bind_ip_num++;
-	if (bind_ip->type == DNS_BIND_TYPE_TLS) {
+	if (bind_ip->type == DNS_BIND_TYPE_TLS || bind_ip->type == DNS_BIND_TYPE_HTTPS) {
 		if (bind_ip->ssl_cert_file == NULL || bind_ip->ssl_cert_key_file == NULL) {
 			bind_ip->ssl_cert_file = dns_conf_bind_ca_file;
 			bind_ip->ssl_cert_key_file = dns_conf_bind_ca_key_file;
@@ -2240,6 +2247,11 @@ static int _config_bind_ip_tcp(void *data, int argc, char *argv[])
 static int _config_bind_ip_tls(void *data, int argc, char *argv[])
 {
 	return _config_bind_ip(argc, argv, DNS_BIND_TYPE_TLS);
+}
+
+static int _config_bind_ip_https(void *data, int argc, char *argv[])
+{
+	return _config_bind_ip(argc, argv, DNS_BIND_TYPE_HTTPS);
 }
 
 static int _config_option_parser_filepath(void *data, int argc, char *argv[])
@@ -4091,6 +4103,7 @@ static struct config_item _config_item[] = {
 	CONF_CUSTOM("bind", _config_bind_ip_udp, NULL),
 	CONF_CUSTOM("bind-tcp", _config_bind_ip_tcp, NULL),
 	CONF_CUSTOM("bind-tls", _config_bind_ip_tls, NULL),
+	CONF_CUSTOM("bind-https", _config_bind_ip_https, NULL),
 	CONF_CUSTOM("bind-cert-file", _config_option_parser_filepath, &dns_conf_bind_ca_file),
 	CONF_CUSTOM("bind-cert-key-file", _config_option_parser_filepath, &dns_conf_bind_ca_key_file),
 	CONF_STRING("bind-cert-key-pass", dns_conf_bind_ca_key_pass, DNS_MAX_PATH),

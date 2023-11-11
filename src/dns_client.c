@@ -93,7 +93,7 @@ struct dns_server_info {
 	/* server ping handle */
 	struct ping_host_struct *ping_host;
 
-	char ip[DNS_HOSTNAME_LEN];
+	char ip[DNS_MAX_HOSTNAME];
 	int port;
 	char proxy_name[DNS_HOSTNAME_LEN];
 	/* server type */
@@ -3327,7 +3327,8 @@ static int _dns_client_send_https(struct dns_server_info *server_info, void *pac
 	http_len = snprintf((char *)inpacket, DNS_IN_PACKSIZE,
 						"POST %s HTTP/1.1\r\n"
 						"Host: %s\r\n"
-						"content-type: application/dns-message\r\n"
+						"User-Agent: smartdns\r\n"
+						"Content-Type: application/dns-message\r\n"
 						"Content-Length: %d\r\n"
 						"\r\n",
 						https_flag->path, https_flag->httphost, len);
