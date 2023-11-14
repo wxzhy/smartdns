@@ -44,11 +44,16 @@ struct dns_cache_head {
 
 typedef int (*dns_cache_read_callback)(struct dns_cache_record *cache_record, struct dns_cache_data *cache_data);
 
+static int is_cache_init;
 static struct dns_cache_head dns_cache_head;
 
 int dns_cache_init(int size, dns_cache_callback timeout_callback)
 {
 	int bits = 0;
+	if (is_cache_init == 1) {
+		return -1;
+	}
+
 	INIT_LIST_HEAD(&dns_cache_head.cache_list);
 
 	bits = ilog2(size) - 1;
@@ -64,6 +69,7 @@ int dns_cache_init(int size, dns_cache_callback timeout_callback)
 	dns_cache_head.timeout_callback = timeout_callback;
 	pthread_mutex_init(&dns_cache_head.lock, NULL);
 
+	is_cache_init = 1;
 	return 0;
 }
 
@@ -262,7 +268,8 @@ static void _dns_cache_remove_by_domain(struct dns_cache_key *cache_key)
 	pthread_mutex_unlock(&dns_cache_head.lock);
 }
 
-static int _dns_cache_insert(struct dns_cache_info *info, struct dns_cache_data *cache_data, struct list_head *head)
+static int _dns_cache_insert(struct dns_cache_info *info, struct dns_cache_data *cache_data, struct list_head *head,
+							 int timeout)
 {
 	uint32_t key = 0;
 	struct dns_cache *dns_cache = NULL;
@@ -291,7 +298,7 @@ static int _dns_cache_insert(struct dns_cache_info *info, struct dns_cache_data 
 	dns_cache->cache_data = cache_data;
 	dns_cache->timer.function = dns_cache_expired;
 	dns_cache->timer.del_function = dns_cache_timer_release;
-	dns_cache->timer.expires = info->timeout;
+	dns_cache->timer.expires = timeout;
 	dns_cache->timer.data = dns_cache;
 	pthread_mutex_lock(&dns_cache_head.lock);
 	hash_table_add(dns_cache_head.cache_hash, &dns_cache->node, key);
@@ -353,7 +360,7 @@ int dns_cache_insert(struct dns_cache_key *cache_key, int rcode, int ttl, int sp
 	time(&info.insert_time);
 	time(&info.replace_time);
 
-	return _dns_cache_insert(&info, cache_data, &dns_cache_head.cache_list);
+	return _dns_cache_insert(&info, cache_data, &dns_cache_head.cache_list, timeout);
 }
 
 struct dns_cache *dns_cache_lookup(struct dns_cache_key *cache_key)
@@ -503,19 +510,17 @@ static int _dns_cache_read_to_cache(struct dns_cache_record *cache_record, struc
 	struct dns_cache_info *info = &cache_record->info;
 
 	time_t now = time(NULL);
-	unsigned int seed_tmp = now;
 	int passed_time = now - info->replace_time;
 	int timeout = info->timeout - passed_time;
+	if ((timeout > dns_conf_serve_expired_ttl + info->ttl) && dns_conf_serve_expired_ttl >= 0) {
+		timeout = dns_conf_serve_expired_ttl + info->ttl;
+	}
+
 	if (timeout < DNS_CACHE_READ_TIMEOUT * 2) {
-		timeout = DNS_CACHE_READ_TIMEOUT + (rand_r(&seed_tmp) % DNS_CACHE_READ_TIMEOUT);
+		timeout = DNS_CACHE_READ_TIMEOUT + (rand() % DNS_CACHE_READ_TIMEOUT);
 	}
 
-	if (timeout > dns_conf_serve_expired_ttl && dns_conf_serve_expired_ttl >= 0) {
-		timeout = dns_conf_serve_expired_ttl;
-	}
-	info->timeout = timeout;
-
-	if (_dns_cache_insert(&cache_record->info, cache_data, head) != 0) {
+	if (_dns_cache_insert(&cache_record->info, cache_data, head, timeout) != 0) {
 		tlog(TLOG_ERROR, "insert cache data failed.");
 		cache_data = NULL;
 		goto errout;
@@ -780,15 +785,21 @@ void dns_cache_destroy(void)
 	struct dns_cache *dns_cache = NULL;
 	struct dns_cache *tmp = NULL;
 
+	if (is_cache_init == 0) {
+		return;
+	}
+
 	pthread_mutex_lock(&dns_cache_head.lock);
 	list_for_each_entry_safe(dns_cache, tmp, &dns_cache_head.cache_list, list)
 	{
-		_dns_cache_delete(dns_cache);
+		_dns_cache_remove(dns_cache);
 	}
 	pthread_mutex_unlock(&dns_cache_head.lock);
 
 	pthread_mutex_destroy(&dns_cache_head.lock);
 	hash_table_free(dns_cache_head.cache_hash, free);
+
+	is_cache_init = 0;
 }
 
 const char *dns_cache_file_version(void)

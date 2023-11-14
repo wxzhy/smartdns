@@ -267,7 +267,7 @@ struct dns_query_struct {
 	/* replied hash table */
 	DECLARE_HASHTABLE(replied_map, 4);
 };
-
+static int is_client_init;
 static struct dns_client client;
 static LIST_HEAD(pending_servers);
 static pthread_mutex_t pending_server_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -4362,11 +4362,13 @@ int dns_client_init(void)
 	int fd_wakeup = -1;
 	int ret = 0;
 
-	if (client.epoll_fd > 0) {
+	if (is_client_init == 1) {
 		return -1;
 	}
 
-	srandom(time(NULL));
+	if (client.epoll_fd > 0) {
+		return -1;
+	}
 
 	memset(&client, 0, sizeof(client));
 	pthread_attr_init(&attr);
@@ -4411,6 +4413,7 @@ int dns_client_init(void)
 	}
 
 	client.fd_wakeup = fd_wakeup;
+	is_client_init = 1;
 
 	return 0;
 errout:
@@ -4437,6 +4440,10 @@ errout:
 
 void dns_client_exit(void)
 {
+	if (is_client_init == 0) {
+		return;
+	}
+
 	if (client.tid) {
 		void *ret = NULL;
 		atomic_set(&client.run, 0);
@@ -4458,4 +4465,6 @@ void dns_client_exit(void)
 		SSL_CTX_free(client.ssl_ctx);
 		client.ssl_ctx = NULL;
 	}
+
+	is_client_init = 0;
 }
