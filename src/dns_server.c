@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
+#include <math.h>
 #include <net/if.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -622,6 +623,16 @@ static int _dns_server_is_return_soa_qtype(struct dns_request *request, dns_type
 
 	if (qtype == DNS_T_AAAA) {
 		if (_dns_server_has_bind_flag(request, BIND_FLAG_FORCE_AAAA_SOA) == 0 || dns_conf_force_AAAA_SOA == 1) {
+			return 1;
+		}
+
+		if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV4] != NULL &&
+			request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV6] == NULL) {
+			return 1;
+		}
+	} else if (qtype == DNS_T_A) {
+		if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV6] != NULL &&
+			request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV4] == NULL) {
 			return 1;
 		}
 	}
@@ -3329,7 +3340,7 @@ static int _dns_server_process_answer(struct dns_request *request, const char *d
 					 request->soa.refresh, request->soa.retry, request->soa.expire, request->soa.minimum);
 
 				int soa_num = atomic_inc_return(&request->soa_num);
-				if ((soa_num >= (dns_server_alive_num() / 3) + 1 || soa_num > 4) &&
+				if ((soa_num >= ((int)ceil((float)dns_server_alive_num() / 3) + 1) || soa_num > 4) &&
 					atomic_read(&request->ip_map_num) <= 0) {
 					request->ip_ttl = ttl;
 					_dns_server_request_complete(request);
@@ -4440,7 +4451,12 @@ static int _dns_server_pre_process_rule_flags(struct dns_request *request)
 		}
 
 		if (_dns_server_is_return_soa(request)) {
-			/* return SOA for A request */
+			/* if AAAA exists, return SOA with NOERROR*/
+			if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV6] != NULL) {
+				goto soa;
+			}
+
+			/* if AAAA not exists, return SOA with NXDOMAIN */
 			if (_dns_server_is_return_soa_qtype(request, DNS_T_AAAA)) {
 				rcode = DNS_RC_NXDOMAIN;
 			}
@@ -4458,7 +4474,11 @@ static int _dns_server_pre_process_rule_flags(struct dns_request *request)
 		}
 
 		if (_dns_server_is_return_soa(request)) {
-			/* return SOA for A request */
+			/* if A exists, return SOA with NOERROR*/
+			if (request->domain_rule.rules[DOMAIN_RULE_ADDRESS_IPV4] != NULL) {
+				goto soa;
+			}
+			/* if A not exists, return SOA with NXDOMAIN */
 			if (_dns_server_is_return_soa_qtype(request, DNS_T_A)) {
 				rcode = DNS_RC_NXDOMAIN;
 			}
@@ -7167,10 +7187,11 @@ static struct addrinfo *_dns_server_getaddr(const char *host, const char *port, 
 	const int s = getaddrinfo(host, port, &hints, &result);
 	if (s != 0) {
 		const char *error_str;
-		if (s == EAI_SYSTEM)
+		if (s == EAI_SYSTEM) {
 			error_str = strerror(errno);
-		else
+		} else {
 			error_str = gai_strerror(s);
+		}
 		tlog(TLOG_ERROR, "get addr info failed. %s.\n", error_str);
 		goto errout;
 	}
