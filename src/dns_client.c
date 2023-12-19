@@ -1674,6 +1674,26 @@ static int _dns_replied_check_add(struct dns_query_struct *dns_query, struct soc
 	return 0;
 }
 
+static void _dns_replied_check_remove(struct dns_query_struct *dns_query, struct sockaddr *addr, socklen_t addr_len)
+{
+	uint32_t key = 0;
+	struct dns_query_replied *replied_map = NULL;
+
+	if (addr_len > sizeof(struct sockaddr_in6)) {
+		return;
+	}
+
+	key = jhash(addr, addr_len, 0);
+	hash_for_each_possible(dns_query->replied_map, replied_map, node, key)
+	{
+		if (memcmp(&replied_map->addr, addr, addr_len) == 0) {
+			hash_del(&replied_map->node);
+			free(replied_map);
+			return;
+		}
+	}
+}
+
 static int _dns_client_recv(struct dns_server_info *server_info, unsigned char *inpacket, int inpacket_len,
 							struct sockaddr *from, socklen_t from_len)
 {
@@ -1761,13 +1781,17 @@ static int _dns_client_recv(struct dns_server_info *server_info, unsigned char *
 	if (query->callback) {
 		ret = query->callback(query->domain, DNS_QUERY_RESULT, server_info, packet, inpacket, inpacket_len,
 							  query->user_ptr);
-		if (request_num == 0 || ret) {
+		if (request_num == 0 && ret == 0) {
 			/* if all server replied, or done, stop query, release resource */
 			_dns_client_query_remove(query);
 		}
 
 		if (ret == 0) {
 			query->has_result = 1;
+		} else {
+			/* remove this result */
+			_dns_replied_check_remove(query, from, from_len);
+			atomic_inc(&query->dns_request_sent);
 		}
 	}
 
@@ -2590,6 +2614,7 @@ static int _dns_client_process_tcp_buff(struct dns_server_info *server_info)
 				tlog(TLOG_WARN, "http server query from %s:%d failed, server return http code : %d, %s",
 					 server_info->ip, server_info->port, http_head_get_httpcode(http_head),
 					 http_head_get_httpcode_msg(http_head));
+				server_info->prohibit = 1;
 				goto out;
 			}
 
@@ -3505,6 +3530,7 @@ static int _dns_client_send_packet(struct dns_query_struct *query, void *packet,
 	void *packet_data = NULL;
 	int packet_data_len = 0;
 	unsigned char packet_data_buffer[DNS_IN_PACKSIZE];
+	int prohibit_time = 60;
 
 	query->send_tick = get_tick_count();
 
@@ -3512,6 +3538,10 @@ static int _dns_client_send_packet(struct dns_query_struct *query, void *packet,
 	atomic_inc(&query->dns_request_sent);
 	for (i = 0; i < 2; i++) {
 		total_server = 0;
+		if (i == 1) {
+			prohibit_time = 5;
+		}
+
 		pthread_mutex_lock(&client.server_list_lock);
 		list_for_each_entry_safe(group_member, tmp, &query->server_group->head, list)
 		{
@@ -3520,11 +3550,15 @@ static int _dns_client_send_packet(struct dns_query_struct *query, void *packet,
 				if (server_info->is_already_prohibit == 0) {
 					server_info->is_already_prohibit = 1;
 					atomic_inc(&client.dns_server_prohibit_num);
+					time(&server_info->last_send);
+					time(&server_info->last_recv);
+					tlog(TLOG_INFO, "server %s not alive, prohibit", server_info->ip);
+					_dns_client_shutdown_socket(server_info);
 				}
 
 				time_t now = 0;
 				time(&now);
-				if ((now - 60 < server_info->last_send) && (now - 5 > server_info->last_recv)) {
+				if ((now - prohibit_time < server_info->last_send)) {
 					continue;
 				}
 				server_info->prohibit = 0;
@@ -3597,8 +3631,6 @@ static int _dns_client_send_packet(struct dns_query_struct *query, void *packet,
 				time(&now);
 				if (now - 10 > server_info->last_recv || send_err != ENOMEM) {
 					server_info->prohibit = 1;
-					tlog(TLOG_INFO, "server %s not alive, prohibit", server_info->ip);
-					_dns_client_shutdown_socket(server_info);
 				}
 
 				atomic_dec(&query->dns_request_sent);
