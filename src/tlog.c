@@ -1222,6 +1222,11 @@ static int _tlog_write_screen(struct tlog_log *log, struct tlog_loginfo *info, c
         return 0;
     }
 
+    if (info == NULL) {
+        
+        return write(STDOUT_FILENO, buff, bufflen);;
+    }
+
     return tlog_stdout_with_color(info->level, buff, bufflen);
 }
 
@@ -1569,7 +1574,6 @@ static int _tlog_root_write_screen_log(struct tlog_log *log, struct tlog_loginfo
     if (log->logscreen == 0) {
         return 0;
     }
-
 
     return _tlog_write_screen(log, info, buff, bufflen);
 }
@@ -1921,8 +1925,8 @@ tlog_log *tlog_open(const char *logfile, int maxlogsize, int maxlogcount, int bu
     log->segment_log = ((flag & TLOG_SEGMENT) == 0) ? 0 : 1;
     log->max_line_size = TLOG_MAX_LINE_LEN;
     log->output_func = _tlog_write;
-    log->file_perm = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    log->archive_perm = S_IRUSR | S_IRGRP | S_IROTH;
+    log->file_perm = S_IRUSR | S_IWUSR | S_IRGRP;
+    log->archive_perm = S_IRUSR | S_IRGRP;
 
     if (log->nocompress == 0 && tlog.gzip_cmd[0] == '\0') {
         log->nocompress = 1;
