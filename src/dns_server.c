@@ -4631,6 +4631,8 @@ static void _dns_server_get_domain_rule_by_domain(struct dns_request *request, c
 	unsigned char matched_key[DNS_MAX_CNAME_LEN];
 	struct rule_walk_args walk_args;
 	int i = 0;
+	struct dns_conf_doamin_rule_group *domain_rule_group = NULL;
+	int no_fallback_default_rule = 0;
 
 	if (request->skip_domain_rule != 0) {
 		return;
@@ -4650,8 +4652,17 @@ static void _dns_server_get_domain_rule_by_domain(struct dns_request *request, c
 	domain_len++;
 	domain_key[domain_len] = 0;
 
+	if (_dns_server_has_bind_flag(request, BIND_FLAG_NO_RULES) == 0) {
+		no_fallback_default_rule = 1;
+	}
+
+	domain_rule_group = dns_server_get_domain_rule_group(request->dns_group_name, no_fallback_default_rule);
+	if (domain_rule_group == NULL) {
+		return;
+	}
+
 	/* find domain rule */
-	art_substring_walk(&dns_conf_domain_rule.default_rule, (unsigned char *)domain_key, domain_len, _dns_server_get_rules,
+	art_substring_walk(&domain_rule_group->tree, (unsigned char *)domain_key, domain_len, _dns_server_get_rules,
 					   &walk_args);
 	if (likely(dns_conf_log_level > TLOG_DEBUG)) {
 		return;
@@ -5585,10 +5596,15 @@ static void _dns_server_request_set_client(struct dns_request *request, struct d
 	_dns_server_conn_get(conn);
 }
 
-static void _dns_server_request_set_client_rules(struct dns_request *request, struct dns_client_rules *client_rule)
+static int _dns_server_request_set_client_rules(struct dns_request *request, struct dns_client_rules *client_rule)
 {
 	if (client_rule == NULL) {
-		return;
+		if (_dns_server_has_bind_flag(request, BIND_FLAG_ACL) == 0) {
+			request->send_tick = get_tick_count();
+			request->rcode = DNS_RC_REFUSED;
+			return -1;
+		}
+		return 0;
 	}
 
 	tlog(TLOG_DEBUG, "match client rule.\n");
@@ -5606,6 +5622,8 @@ static void _dns_server_request_set_client_rules(struct dns_request *request, st
 			request->server_flags = flags->flags;
 		}
 	}
+
+	return 0;
 }
 
 static void _dns_server_request_set_id(struct dns_request *request, unsigned short id)
@@ -6191,7 +6209,6 @@ static int _dns_server_recv(struct dns_server_conn_head *conn, unsigned char *in
 
 	memcpy(&request->localaddr, local, local_len);
 	_dns_server_request_set_client(request, conn);
-	_dns_server_request_set_client_rules(request, client_rules);
 	_dns_server_request_set_client_addr(request, from, from_len);
 	_dns_server_request_set_id(request, packet->head.id);
 
@@ -6213,6 +6230,13 @@ static int _dns_server_recv(struct dns_server_conn_head *conn, unsigned char *in
 		}
 		request->send_tick = get_tick_count();
 		request->rcode = DNS_RC_REFUSED;
+		ret = 0;
+		goto errout;
+	}
+
+
+	ret = _dns_server_request_set_client_rules(request, client_rules);
+	if (ret != 0) {
 		ret = 0;
 		goto errout;
 	}
