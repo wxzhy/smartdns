@@ -280,17 +280,6 @@ struct dns_response_mode_rule {
 	enum response_mode_type mode;
 };
 
-struct dns_conf_doamin_rule_group {
-	struct hlist_node node;
-	art_tree tree;
-	const char *group_name;
-};
-
-struct dns_conf_domain_rule {
-	struct dns_conf_doamin_rule_group *default_rule;
-	DECLARE_HASHTABLE(group, 8);
-};
-
 struct dns_group_table {
 	DECLARE_HASHTABLE(group, 8);
 };
@@ -411,6 +400,38 @@ struct dns_conf_address_rule {
 	radix_tree_t *ipv6;
 };
 
+struct dns_conf_domain_rule {
+	art_tree tree;
+};
+
+struct dns_conf_ipset_nftset {
+	int ipset_timeout_enable;
+	struct dns_ipset_names ipset_no_speed;
+	struct dns_ipset_names ipset;
+	int nftset_timeout_enable;
+	struct dns_nftset_names nftset_no_speed;
+	struct dns_nftset_names nftset;
+};
+
+struct dns_conf_group {
+	struct hlist_node node;
+	struct dns_conf_domain_rule domain_rule;
+	struct dns_conf_address_rule address_rule;
+	uint8_t *soa_table;
+	char copy_data_section_begin[0];
+	struct dns_conf_ipset_nftset ipset_nftset;
+	struct dns_domain_check_orders check_orders;
+	int force_AAAA_SOA;
+	int dualstack_ip_selection;
+	char copy_data_section_end[0];
+	const char *group_name;
+};
+
+struct dns_conf_rule {
+	struct dns_conf_group *default_conf;
+	DECLARE_HASHTABLE(group, 8);
+};
+
 struct dns_client_rule {
 	atomic_t refcnt;
 	enum client_rule rule;
@@ -453,8 +474,6 @@ struct dns_bind_ip {
 	const char *group;
 	struct nftset_ipset_rules nftset_ipset_rule;
 };
-
-extern uint8_t *dns_qtype_soa_table;
 
 struct dns_domain_set_rule {
 	struct list_head list;
@@ -598,7 +617,9 @@ extern char dns_conf_cache_file[DNS_MAX_PATH];
 extern int dns_conf_cache_persist;
 extern int dns_conf_cache_checkpoint_time;
 
-extern struct dns_domain_check_orders dns_conf_check_orders;
+extern struct dns_domain_check_orders dns_conf_default_check_orders;
+extern int dns_conf_has_icmp_check;
+extern int dns_conf_has_tcp_check;
 
 extern struct dns_server_groups dns_conf_server_groups[DNS_NAX_GROUP_NUMBER];
 extern int dns_conf_server_group_num;
@@ -615,10 +636,8 @@ extern int dns_conf_audit_syslog;
 
 extern char dns_conf_server_name[DNS_MAX_SERVER_NAME_LEN];
 extern struct dns_conf_domain_rule dns_conf_domain_rule;
-extern struct dns_conf_address_rule dns_conf_address_rule;
 extern struct dns_conf_client_rule dns_conf_client_rule;
 
-extern int dns_conf_dualstack_ip_selection;
 extern int dns_conf_dualstack_ip_allow_force_AAAA;
 extern int dns_conf_dualstack_ip_selection_threshold;
 
@@ -630,12 +649,10 @@ extern int dns_conf_rr_ttl;
 extern int dns_conf_rr_ttl_reply_max;
 extern int dns_conf_rr_ttl_min;
 extern int dns_conf_rr_ttl_max;
-extern int dns_conf_force_AAAA_SOA;
-extern int dns_conf_ipset_timeout_enable;
-extern int dns_conf_nftset_timeout_enable;
 extern int dns_conf_nftset_debug_enable;
 extern int dns_conf_local_ttl;
 extern int dns_conf_mdns_lookup;
+extern int dns_conf_acl_enable;
 
 extern int dns_conf_force_no_cname;
 
@@ -663,7 +680,9 @@ struct dns_proxy_names *dns_server_get_proxy_nams(const char *proxyname);
 
 struct dns_srv_records *dns_server_get_srv_record(const char *domain);
 
-struct dns_conf_doamin_rule_group *dns_server_get_domain_rule_group(const char *group_name, int no_fallback_default);
+struct dns_conf_group *dns_server_get_rule_group(const char *group_name);
+
+struct dns_conf_group *dns_server_get_default_rule_group(void);
 
 extern int config_additional_file(void *data, int argc, char *argv[]);
 
