@@ -1,6 +1,6 @@
 /*************************************************************************
  *
- * Copyright (C) 2018-2023 Ruilin Peng (Nick) <pymumu@gmail.com>.
+ * Copyright (C) 2018-2024 Ruilin Peng (Nick) <pymumu@gmail.com>.
  *
  * smartdns is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -569,9 +569,10 @@ static int _dns_cache_read_to_cache(struct dns_cache_record *cache_record, struc
 		info->replace_time = now;
 	}
 
-	expired_time = dns_conf_serve_expired_prefetch_time;
+	struct dns_conf_group *rule_group = dns_server_get_rule_group(info->dns_group_name);
+	expired_time = rule_group->dns_serve_expired_prefetch_time;
 	if (expired_time == 0) {
-		expired_time = dns_conf_serve_expired_ttl / 2;
+		expired_time = rule_group->dns_serve_expired_ttl / 2;
 		if (expired_time == 0 || expired_time > EXPIRED_DOMAIN_PREFETCH_TIME) {
 			expired_time = EXPIRED_DOMAIN_PREFETCH_TIME;
 		}
