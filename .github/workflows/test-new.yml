@@ -134,7 +134,7 @@ jobs:
     needs: get-version
     strategy:
       matrix:
-        goarch: [luci, luci-compat]
+        goarch: [luci, luci-compat, luci-lite]
     runs-on: ubuntu-latest
     env:
       GOARCH: ${{ matrix.goarch }}
