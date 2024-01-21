@@ -610,6 +610,10 @@ static int _config_current_group_push(const char *group_name)
 	struct dns_conf_group_info *group_info = NULL;
 	struct dns_conf_group *group_rule = NULL;
 
+	if (group_name == NULL) {
+		goto errout;
+	}
+
 	group_info = malloc(sizeof(*group_info));
 	if (group_info == NULL) {
 		goto errout;
@@ -673,7 +677,7 @@ static int _config_group_begin(void *data, int argc, char *argv[])
 
 static int _config_current_group_push_default(void)
 {
-	return _config_current_group_push(NULL);
+	return _config_current_group_push("");
 }
 
 static int _config_current_group_pop_to(struct dns_conf_group_info *group_info)
@@ -1202,6 +1206,11 @@ static struct dns_conf_group *_config_rule_group_get(const char *group_name)
 {
 	uint32_t key = 0;
 	struct dns_conf_group *rule_group = NULL;
+
+	if (dns_conf_rule.group_num <= 1) {
+		return NULL;
+	}
+
 	if (group_name == NULL) {
 		group_name = "";
 	}
@@ -1253,6 +1262,7 @@ static struct dns_conf_group *_config_rule_group_new(const char *group_name)
 
 	key = hash_string(group_name);
 	hash_add(dns_conf_rule.group, &rule_group->node, key);
+	dns_conf_rule.group_num++;
 
 	return rule_group;
 }
@@ -1260,6 +1270,7 @@ static struct dns_conf_group *_config_rule_group_new(const char *group_name)
 static void _config_rule_group_remove(struct dns_conf_group *rule_group)
 {
 	hlist_del_init(&rule_group->node);
+	dns_conf_rule.group_num--;
 	art_iter(&rule_group->domain_rule.tree, _config_domain_iter_free, NULL);
 	art_tree_destroy(&rule_group->domain_rule.tree);
 	Destroy_Radix(rule_group->address_rule.ipv4, _config_ip_iter_free, NULL);
