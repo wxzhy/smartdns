@@ -1230,6 +1230,10 @@ static struct dns_conf_group *_config_rule_group_get(const char *group_name)
 
 struct dns_conf_group *dns_server_get_rule_group(const char *group_name)
 {
+	if (dns_conf_rule.group_num <= 1) {
+		return dns_conf_rule.default_conf;
+	}
+
 	struct dns_conf_group *rule_group = _config_rule_group_get(group_name);
 	if (rule_group) {
 		return rule_group;
@@ -1247,6 +1251,10 @@ static struct dns_conf_group *_config_rule_group_new(const char *group_name)
 {
 	struct dns_conf_group *rule_group = NULL;
 	uint32_t key = 0;
+
+	if (group_name == NULL) {
+		return NULL;
+	}
 
 	rule_group = malloc(sizeof(*rule_group));
 	if (rule_group == NULL) {
@@ -1278,6 +1286,7 @@ static void _config_rule_group_remove(struct dns_conf_group *rule_group)
 	Destroy_Radix(rule_group->address_rule.ipv4, _config_ip_iter_free, NULL);
 	Destroy_Radix(rule_group->address_rule.ipv6, _config_ip_iter_free, NULL);
 	free(rule_group->soa_table);
+	dns_conf_rule.group_num--;
 
 	free(rule_group);
 }

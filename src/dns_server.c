@@ -359,6 +359,7 @@ struct dns_request {
 
 	int has_cname_loop;
 
+	void *private_data;
 };
 
 /* dns server data */
@@ -2815,6 +2816,16 @@ void dns_server_request_get(struct dns_request *request)
 void dns_server_request_put(struct dns_request *request)
 {
 	_dns_server_request_release(request);
+}
+
+void dns_server_request_set_private(struct dns_request *request, void *private_data)
+{
+	request->private_data = private_data;
+}
+
+void *dns_server_request_get_private(struct dns_request *request)
+{
+	return request->private_data;
 }
 
 static int _dns_server_set_to_pending_list(struct dns_request *request)

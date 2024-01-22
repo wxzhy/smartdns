@@ -91,6 +91,10 @@ void dns_server_request_get(struct dns_request *request);
 
 void dns_server_request_put(struct dns_request *request);
 
+void dns_server_request_set_private(struct dns_request *request, void *private_data);
+
+void *dns_server_request_get_private(struct dns_request *request);
+
 #ifdef __cplusplus
 }
 #endif
