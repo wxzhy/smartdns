@@ -36,100 +36,100 @@ jobs:
         include:
           - arch: aarch64_cortex-a53
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm27xx/bcm2710
-            sdk_name: -sdk-bcm27xx-bcm2710_
+            sdk_name: -sdk-23.05.2-bcm27xx-bcm2710_
           - arch: aarch64_cortex-a72
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/mvebu/cortexa72
-            sdk_name: -sdk-mvebu-cortexa72_
+            sdk_name: -sdk-23.05.2-mvebu-cortexa72_
           - arch: aarch64_generic
             sdk_url_path: http://downloads.openwrt.org/releases/23.05.2/targets/layerscape/armv8_64b
-            sdk_name: -sdk-layerscape-armv8_64b_
+            sdk_name: -sdk-23.05.2-layerscape-armv8_64b_
           - arch: arm_arm1176jzf-s_vfp
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm27xx/bcm2708
-            sdk_name: -sdk-bcm27xx-bcm2708_
+            sdk_name: -sdk-23.05.2-bcm27xx-bcm2708_
           #- arch: arm_arm926ej-s    #build openssl failed
           #  sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/at91/legacy
-          #  sdk_name: -sdk-at91-legacy_
+          #  sdk_name: -sdk-23.05.2-at91-legacy_
           - arch: arm_cortex-a15_neon-vfpv4
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/ipq806x/generic
-            sdk_name: -sdk-ipq806x-generic_
+            sdk_name: -sdk-23.05.2-ipq806x-generic_
           - arch: arm_cortex-a5-vfpv4
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/at91/sama5
-            sdk_name: -sdk-at91-sama5_
+            sdk_name: -sdk-23.05.2-at91-sama5_
           - arch: arm_cortex-a7_neon-vfpv4
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm27xx/bcm2709
-            sdk_name: -sdk-bcm27xx-bcm2709_
+            sdk_name: -sdk-23.05.2-bcm27xx-bcm2709_
           - arch: arm_cortex-a8_vfpv3
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/sunxi/cortexa8
-            sdk_name: -sdk-sunxi-cortexa8_
+            sdk_name: -sdk-23.05.2-sunxi-cortexa8_
           - arch: arm_cortex-a9
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm53xx/generic
-            sdk_name: -sdk-bcm53xx-generic_
+            sdk_name: -sdk-23.05.2-bcm53xx-generic_
           #- arch: arm_cortex-a9_neon
           #  sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/imx6/generic
-          #  sdk_name: -sdk-imx6_
+          #  sdk_name: -sdk-23.05.2-imx6_
           #- arch: arm_cortex-a9_vfpv3
           #  sdk_url_path: https://downloads.openwrt.org/releases/19.07.2/targets/mvebu/cortexa9
-          #  sdk_name: -sdk-19.07.2-mvebu-cortexa9_
+          #  sdk_name: -sdk-23.05.2-19.07.2-mvebu-cortexa9_
           - arch: arm_cortex-a9_vfpv3-d16
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/mvebu/cortexa9
-            sdk_name: -sdk-mvebu-cortexa9_
+            sdk_name: -sdk-23.05.2-mvebu-cortexa9_
           - arch: arm_fa526
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/gemini/generic
-            sdk_name: -sdk-gemini-generic_
+            sdk_name: -sdk-23.05.2-gemini-generic_
           - arch: arm_mpcore
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/oxnas/ox820
-            sdk_name: -sdk-oxnas-ox820_
+            sdk_name: -sdk-23.05.2-oxnas-ox820_
           #- arch: arm_mpcore_vfp
           #  sdk_url_path: https://downloads.openwrt.org/releases/19.07.7/targets/cns3xxx/generic
-          #  sdk_name: -sdk-19.07.7-cns3xxx_
+          #  sdk_name: -sdk-23.05.2-19.07.7-cns3xxx_
           - arch: arm_xscale
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/kirkwood/generic
-            sdk_name: -sdk-kirkwood-generic_
+            sdk_name: -sdk-23.05.2-kirkwood-generic_
           - arch: i386_pentium
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/x86/legacy
-            sdk_name: -sdk-x86-legacy_
+            sdk_name: -sdk-23.05.2-x86-legacy_
           - arch: i386_pentium4
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/x86/generic
-            sdk_name: -sdk-x86-generic_
+            sdk_name: -sdk-23.05.2-x86-generic_
           - arch: mips64_octeon
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/octeon/generic
-            sdk_name: -sdk-octeon-generic_
+            sdk_name: -sdk-23.05.2-octeon-generic_
           - arch: mipsel_24kc
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/ramips/mt7620
-            sdk_name: -sdk-ramips-mt7620_
+            sdk_name: -sdk-23.05.2-ramips-mt7620_
           - arch: mipsel_24kc_24kf
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/pistachio/generic
-            sdk_name: -sdk-pistachio-generic_
+            sdk_name: -sdk-23.05.2-pistachio-generic_
           - arch: mipsel_74kc
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm47xx/mips74k
-            sdk_name: -sdk-bcm47xx-mips74k_
+            sdk_name: -sdk-23.05.2-bcm47xx-mips74k_
           - arch: mipsel_mips32
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm47xx/generic
-            sdk_name: -sdk-bcm47xx-generic_
+            sdk_name: -sdk-23.05.2-bcm47xx-generic_
           - arch: mips_24kc
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/ath79/generic
-            sdk_name: -sdk-ath79-generic_
+            sdk_name: -sdk-23.05.2-ath79-generic_
           - arch: mips_mips32
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/bcm63xx/generic
-            sdk_name: -sdk-bcm63xx-generic_
+            sdk_name: -sdk-23.05.2-bcm63xx-generic_
           - arch: x86_64
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/x86/64
-            sdk_name: -sdk-x86-64_
+            sdk_name: -sdk-23.05.2-x86-64_
           - arch: powerpc_464fp
             sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/apm821xx/nand
-            sdk_name: -sdk-apm821xx-nand_
+            sdk_name: -sdk-23.05.2-apm821xx-nand_
           #- arch: powerpc_8540         
           #  sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/mpc85xx/generic
-          #  sdk_name: -sdk-mpc85xx-generic_
+          #  sdk_name: -sdk-23.05.2-mpc85xx-generic_
           # - arch: arc_arc700
           #   sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/arc770/generic
-          #   sdk_name: -sdk-arc770-generic_
+          #   sdk_name: -sdk-23.05.2-arc770-generic_
           # - arch: arc_archs
           #   sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/archs38/generic
-          #   sdk_name: -sdk-archs38-generic_
+          #   sdk_name: -sdk-23.05.2-archs38-generic_
           # - arch: armeb_xscale
           #   sdk_url_path: https://downloads.openwrt.org/releases/23.05.2/targets/ixp4xx/generic
-          #   sdk_name: -sdk-ixp4xx-generic_
+          #   sdk_name: -sdk-23.05.2-ixp4xx-generic_
 
     env:
       SDK_URL_PATH: ${{ matrix.sdk_url_path }}
