@@ -23,6 +23,13 @@ CXXFLAGS += -g
 CXXFLAGS += -DTEST
 CXXFLAGS += -I./ -I../src -I../src/include
 
+ifdef TEST_ASAN
+CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+CC = clang
+CXX = clang++
+LDFLAGS = -fsanitize=address,undefined
+endif
+
 OBJS_LIB=$(patsubst %.c,%.o,$(wildcard ../src/lib/*.c))
 OBJS_MAIN=$(patsubst %.c,%.o,$(wildcard ../src/*.c))
 OBJS = $(OBJS_LIB) $(OBJS_MAIN)

@@ -89,7 +89,7 @@ struct fast_ping_packet_msg {
 
 struct fast_ping_packet {
 	union {
-		struct icmp icmp;
+		struct icmphdr icmp;
 		struct icmp6_hdr icmp6;
 	};
 	unsigned int ttl;
@@ -797,23 +797,23 @@ errout:
 static int _fast_ping_sendping_v4(struct ping_host_struct *ping_host)
 {
 	struct fast_ping_packet *packet = &ping_host->packet;
-	struct icmp *icmp = &packet->icmp;
+	struct icmphdr *icmp = &packet->icmp;
 	int len = 0;
 
 	ping_host->seq++;
 	memset(icmp, 0, sizeof(*icmp));
-	icmp->icmp_type = ICMP_ECHO;
-	icmp->icmp_code = 0;
-	icmp->icmp_cksum = 0;
-	icmp->icmp_id = ping.ident;
-	icmp->icmp_seq = htons(ping_host->seq);
+	icmp->type = ICMP_ECHO;
+	icmp->code = 0;
+	icmp->checksum = 0;
+	icmp->un.echo.id = ping.ident;
+	icmp->un.echo.sequence = htons(ping_host->seq);
 
 	gettimeofday(&packet->msg.tv, NULL);
 	gettimeofday(&ping_host->last, NULL);
 	packet->msg.sid = ping_host->sid;
 	packet->msg.seq = ping_host->seq;
 	packet->msg.cookie = ping_host->cookie;
-	icmp->icmp_cksum = _fast_ping_checksum((void *)packet, sizeof(struct fast_ping_packet));
+	icmp->checksum = _fast_ping_checksum((void *)packet, sizeof(struct fast_ping_packet));
 
 	len = sendto(ping.fd_icmp, packet, sizeof(struct fast_ping_packet), 0, &ping_host->addr, ping_host->addr_len);
 	if (len != sizeof(struct fast_ping_packet)) {
@@ -1589,12 +1589,23 @@ static struct fast_ping_packet *_fast_ping_icmp_packet(struct ping_host_struct *
 {
 	struct ip *ip = (struct ip *)packet_data;
 	struct fast_ping_packet *packet = NULL;
-	struct icmp *icmp = NULL;
+	struct fast_ping_packet packet_data_buffer;
+	struct icmphdr *icmp = NULL;
 	int hlen = 0;
 	int icmp_len = 0;
 
 	hlen = ip->ip_hl << 2;
-	packet = (struct fast_ping_packet *)(packet_data + hlen);
+	if (data_len - hlen < (int)sizeof(struct fast_ping_packet)) {
+		tlog(TLOG_ERROR, "ping package length is invalid, %d", data_len - hlen);
+		return NULL;
+	}
+
+	if ((uintptr_t)(packet_data + hlen) % __alignof__(void *) == 0 || ping.no_unprivileged_ping == 0) {
+		packet = (struct fast_ping_packet *)(packet_data + hlen);
+	} else {
+		memcpy(&packet_data_buffer, packet_data + hlen, sizeof(packet_data_buffer));
+		packet = &packet_data_buffer;
+	}
 	icmp = &packet->icmp;
 	icmp_len = data_len - hlen;
 	packet->ttl = ip->ip_ttl;
@@ -1604,7 +1615,7 @@ static struct fast_ping_packet *_fast_ping_icmp_packet(struct ping_host_struct *
 		return NULL;
 	}
 
-	if (icmp->icmp_type != ICMP_ECHOREPLY) {
+	if (icmp->type != ICMP_ECHOREPLY) {
 		errno = ENETUNREACH;
 		return NULL;
 	}
@@ -1615,8 +1626,8 @@ static struct fast_ping_packet *_fast_ping_icmp_packet(struct ping_host_struct *
 			return NULL;
 		}
 
-		if (icmp->icmp_id != ping.ident) {
-			tlog(TLOG_ERROR, "ident failed, %d:%d", icmp->icmp_id, ping.ident);
+		if (icmp->un.echo.id != ping.ident) {
+			tlog(TLOG_ERROR, "ident failed, %d:%d", icmp->un.echo.id, ping.ident);
 			return NULL;
 		}
 	}
