@@ -48,7 +48,7 @@
 
 #define member_size(type, member) sizeof(((type *)0)->member)
 
-static int is_aligment(void *ptr, int aligment)
+static int is_aligned(void *ptr, int aligment)
 {
 	return ((uintptr_t)(ptr)) % aligment == 0;
 }
@@ -58,7 +58,7 @@ static unsigned short _dns_read_short(unsigned char **buffer)
 {
 	unsigned short value = 0;
 
-	if (is_aligment(*buffer, 2)) {
+	if (is_aligned(*buffer, 2)) {
 		value = *((unsigned short *)(*buffer));
 	} else {
 		memcpy(&value, *buffer, 2);
@@ -88,7 +88,7 @@ static void _dns_write_short(unsigned char **buffer, unsigned short value)
 {
 	value = htons(value);
 
-	if (is_aligment(*buffer, 2)) {
+	if (is_aligned(*buffer, 2)) {
 		*((unsigned short *)(*buffer)) = value;
 	} else {
 		memcpy(*buffer, &value, 2);
@@ -110,7 +110,7 @@ static void _dns_write_shortptr(unsigned char **buffer, void *ptrvalue)
 
 	value = htons(value);
 
-	if (is_aligment(*buffer, 2)) {
+	if (is_aligned(*buffer, 2)) {
 		*((unsigned short *)(*buffer)) = value;
 	} else {
 		memcpy(*buffer, &value, 2);
@@ -123,7 +123,7 @@ static void _dns_write_shortptr(unsigned char **buffer, void *ptrvalue)
 static void _dns_write_int(unsigned char **buffer, unsigned int value)
 {
 	value = htonl(value);
-	if (is_aligment(*buffer, 4)) {
+	if (is_aligned(*buffer, 4)) {
 		*((unsigned int *)(*buffer)) = value;
 	} else {
 		memcpy(*buffer, &value, 4);
@@ -143,7 +143,7 @@ static void _dns_write_intptr(unsigned char **buffer, void *ptrvalue)
 	}
 
 	value = htonl(value);
-	if (is_aligment(*buffer, 4)) {
+	if (is_aligned(*buffer, 4)) {
 		*((unsigned int *)(*buffer)) = value;
 	} else {
 		memcpy(*buffer, &value, 4);
@@ -156,7 +156,7 @@ static unsigned int _dns_read_int(unsigned char **buffer)
 {
 	unsigned int value = 0;
 
-	if (is_aligment(*buffer, 4)) {
+	if (is_aligned(*buffer, 4)) {
 		value = *((unsigned int *)(*buffer));
 	} else {
 		memcpy(&value, *buffer, 4);
@@ -663,14 +663,14 @@ int dns_add_rr_nested_memcpy(struct dns_rr_nested *rr_nested, const void *data, 
 		return -1;
 	}
 
-	if (is_aligment(rr_nested->context.ptr, 2) == 0) {
+	if (is_aligned(rr_nested->context.ptr, 2) == 0) {
 		return -1;
 	}
 
 	memcpy(rr_nested->context.ptr, data, data_len);
 	rr_nested->context.ptr += data_len;
 
-	if (is_aligment(rr_nested->context.ptr, 2) == 0) {
+	if (is_aligned(rr_nested->context.ptr, 2) == 0) {
 		if (_dns_left_len(&rr_nested->context) < 1) {
 			return -1;
 		}
@@ -731,7 +731,7 @@ void *dns_get_rr_nested_next(struct dns_rrs *rrs, void *rr_nested, int rr_nested
 	void *end = rrs->data + rrs->len;
 	void *p = rr_nested + rr_nested_len;
 
-	if (is_aligment(p, 2) == 0) {
+	if (is_aligned(p, 2) == 0) {
 		p++;
 	}
 
@@ -1278,7 +1278,7 @@ int dns_add_HTTPS_start(struct dns_rr_nested *svcparam_buffer, struct dns_packet
 	safe_strncpy((char *)svcparam_buffer->context.ptr, target, target_len);
 	svcparam_buffer->context.ptr += target_len;
 
-	if (is_aligment(svcparam_buffer->context.ptr, 2) != 1) {
+	if (is_aligned(svcparam_buffer->context.ptr, 2) != 1) {
 		if (_dns_left_len(&svcparam_buffer->context) < 1) {
 			return -1;
 		}
@@ -1469,7 +1469,7 @@ int dns_get_HTTPS_svcparm_start(struct dns_rrs *rrs, struct dns_https_param **ht
 	}
 
 	/* PADDING */
-	if (is_aligment(data, 2) != 1) {
+	if (is_aligned(data, 2) != 1) {
 		data++;
 		rr_len--;
 	}
