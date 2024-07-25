@@ -36,7 +36,7 @@ jobs:
           sed -i "s/VER=.*/VER=${{steps.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
           #构建image
           docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
-          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
+          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:latest -t pikuzheng/smartdns:${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.alpine .
           #增加 check-edns分支
           cat >> Makefile.patch << EOF
           --- Makefile
@@ -51,5 +51,5 @@ jobs:
            override CXXFLAGS +=-Iinclude
           EOF
           patch -p0 ./src/Makefile Makefile.patch
-          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:check-edns -f Dockerfile.alpine .
+          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:check-edns -f Dockerfile.alpine .
           
