@@ -152,10 +152,10 @@ jobs:
           #单独编译luci和luci-compat
           ./package/build-pkg.sh --platform $GOARCH --arch all --filearch $GOARCH-all --outputdir ${{ github.workspace }}/build
 
-      - name: Upload To Artifact
-        uses: actions/upload-artifact@v2
-        with:
-          path: ${{ github.workspace }}/build/
+#      - name: Upload To Artifact
+#        uses: actions/upload-artifact@v2
+#        with:
+#          path: ${{ github.workspace }}/build/
 
       - name: Generate release tag
         id: tag
