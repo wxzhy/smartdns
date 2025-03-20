@@ -17,6 +17,7 @@ FROM alpine:3.21
 ENV TZ="Asia/Shanghai"
 COPY --from=smartdns-builder /smartdns/src/smartdns /usr/sbin
 COPY --from=smartdns-builder /smartdns/plugin/smartdns-ui/target/release/libsmartdns_ui.so /usr/lib
+COPY --from=smartdns-builder /usr/lib/libgcc_s.so.1 /usr/lib
 EXPOSE 53/udp 53/tcp
 VOLUME "/etc/smartdns/"
 HEALTHCHECK --interval=5m CMD test `nslookup dns.pub 127.0.0.1 |grep answer |wc -l` -gt 0
