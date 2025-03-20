@@ -39,4 +39,6 @@ jobs:
           #构建image
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
           docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.ui .
+          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
+          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:ui -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:ui-${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.ui .
           
