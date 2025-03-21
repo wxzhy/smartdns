@@ -6,39 +6,133 @@ on:
       - master
       
 jobs:
-  # 构建并上传 Docker镜像
-  build: 
-    runs-on: ubuntu-latest # 依赖的环境      
+  get-version:
+    name: get latest version number
+    runs-on: ubuntu-latest
+    outputs:
+      CUR_VERSION: ${{steps.get-version.outputs.CUR_VERSION}}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: VERSION_CONTROL
-          fetch-depth: 1
-          path: version_control
-      - name: get version
-        id: get-version
-        run: |
+    - uses: actions/checkout@v3
+      with:
+        ref: VERSION_CONTROL
+        fetch-depth: 1
+        path: version_control
+    - name: get version
+      id: get-version
+      run: |
           #获取当前版本号
           pre_version=$(cat version_control/VERSION | grep "PREFEX" | sed 's/PREFEX=\(.*\)/\1/')
           cur_version=$(cat version_control/VERSION | grep "CUR_VERS" | sed 's/CUR_VERS=\(.*\)/\1/')
           echo "CUR_VERSION=$pre_version$cur_version" >> $GITHUB_OUTPUT
+
+  build: 
+    strategy:
+      matrix:
+        goarch: [x86_64, i686, aarch64, armv7, mips, mips64, powerpc64le]
+      fail-fast: false
+    runs-on: ubuntu-latest
+    env:
+      GOARCH: ${{ matrix.goarch }}
+    steps:
       - uses: actions/checkout@v3
       - uses: docker/setup-qemu-action@v2
-        with:
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
       - uses: docker/setup-buildx-action@v2
         with:
           install: true
-      - name: Build Image
-        env:
-          VER: ${{steps.get-version.outputs.CUR_VERSION}}
+      - name: build-smartdns
         run: |
+          sudo apt install -y rename
+          sudo timedatectl set-timezone "Asia/Shanghai"
+          cd ${{ github.workspace }}
+          mkdir -p ${{ github.workspace }}/build
           #修改版本号
-          cd ${{ github.workspace }} 
-          sed -i "s/VER=.*/VER=${{steps.get-version.outputs.CUR_VERSION}}/" package/build-pkg.sh
-          #构建image
+          sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
+          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/openssl-3.3.3.tar.gz -o openssl.tar.gz
+          tar -zxvf openssl.tar.gz --strip-components 1 -C openssl
+          rm docker-openssl.sh || true
+          cat >> docker-openssl.sh << EOF
+          apk add perl make coreutils tar pkgconfig dpkg binutils
+          cd ${{ github.workspace }}/openssl
+          if [ "$GOARCH" == "mipsel" ] || [ "$GOARCH" == "mips" ] ;then
+            ./Configure no-tests linux-mips32
+          elif [ "$GOARCH" == "mips64el" ] || [ "$GOARCH" == "mips64" ] ;then
+            ./Configure no-tests linux-mips64
+          elif [ "$GOARCH" == "i686" ] ;then
+            ./Configure no-tests linux-x86
+          elif [ "$GOARCH" == "powerpc64le" ] ;then
+            ./Configure no-tests linux-ppc64le
+          elif [ "$GOARCH" == "armv7" ] ;then
+            ./Configure no-tests linux-armv4
+          else
+           ./Configure no-tests linux-$GOARCH
+          fi
+          make clean && make all
+          cd ${{ github.workspace }}
+          export CFLAGS="-I /workdir/openssl/include"
+          export LDFLAGS="-L /workdir/openssl"
+          ./package/build-pkg.sh --platform linux --arch all --filearch x86_64-linux --outputdir /workdir/build
+          EOF
+          if  test "$GOARCH" = "armv7" ;then
+            docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:armv7l-linux-musleabihf sh /workdir/docker-openssl.sh
+          else
+            docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/docker-openssl.sh
+          fi
+      - name: build-ui
+        run: |
+          rm docker-build.sh || true
+          cat >> docker-build.sh << EOF
+          cd ${{ github.workspace }}/plugin/smartdns-ui
+          export OPENSSL_DIR=/workdir/openssl
+          export OPENSSL_LIB_DIR="/workdir/openssl"
+          export OPENSSL_INCLUDE_DIR="/workdir/openssl/include"
+          export RUSTFLAGS='-C link-arg=-Wl,-rpath,./ -C target-feature=-crt-static'
+          if  test "$GOARCH" = "armv7" ;then
+            cargo build --release --target=armv7-unknown-linux-musleabi
+            cp ./target/armv7-unknown-linux-musleabi/release/libsmartdns_ui.so ./
+          elif  test "$GOARCH" = "mips64" || test "$GOARCH" = "mips64el" ;then
+            cargo build --release --target=$GOARCH-unknown-linux-muslabi64
+            cp ./target/armv7-unknown-linux-musleabi/release/libsmartdns_ui.so ./
+          else
+            cargo build --release --target=$GOARCH-unknown-linux-musl
+            cp ./target/$GOARCH-unknown-linux-musl/release/libsmartdns_ui.so ./
+          fi
+          cp /usr/local/musl/$GOARCH-unknown-linux-musl/lib/libgcc_s.so.1 ./
+          strip libsmartdns_ui.so
+          EOF
+          if  test "$GOARCH" = "armv7" ;then
+            docker run -i --rm -v ${{ github.workspace }}:/workdir messense/rust-musl-cross:armv7-musleabi sh /workdir/docker-build.sh
+          else
+            docker run -i --rm -v ${{ github.workspace }}:/workdir messense/rust-musl-cross:$GOARCH-musl sh /workdir/docker-build.sh
+          fi
+          cd ${{ github.workspace }}
+          cat >> Dockerfile.unknown << EOF
+          FROM alpine:3.21
+          ENV TZ="Asia/Shanghai"
+          COPY ./src/smartdns /usr/sbin
+          COPY ./plugin/smartdns-ui/libsmartdns_ui.so /usr/lib
+          COPY ./plugin/smartdns-ui/libgcc_s.so.1 /usr/lib
+          EXPOSE 53/udp 53/tcp
+          VOLUME "/etc/smartdns/"
+          HEALTHCHECK --interval=5m CMD test `nslookup dns.pub 127.0.0.1 |grep answer |wc -l` -gt 0
+          CMD ["/usr/sbin/smartdns", "run", "-c", "/etc/smartdns/smartdns.conf"]
+          EOF
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
-          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.ui .
-          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
-          docker buildx build --no-cache --platform linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6 --push -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:ui -t ccr.ccs.tencentyun.com/pikuzheng/smartdns:ui-${{steps.get-version.outputs.CUR_VERSION}} -f Dockerfile.ui .
-          
+          if  test "$GOARCH" = "i686" ;then
+            docker buildx build --no-cache --platform linux/386 --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
+          elif  test "$GOARCH" = "armv7" ;then
+            docker buildx build --no-cache --platform linux/arm/v7 --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
+          else
+            docker buildx build --no-cache --platform linux/$GOARCH --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
+          fi
+  create-manifest:
+    name: create docker manifest
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v2
+        with:
+          install: true
+      - name: create manifest
+        run: |
+          docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-i686 pikuzheng/smartdns:ui-aarch64 pikuzheng/smartdns:ui-armv7 pikuzheng/smartdns:ui-ppc64le pikuzheng/smartdns:ui-mips pikuzheng/smartdns:ui-mips64
