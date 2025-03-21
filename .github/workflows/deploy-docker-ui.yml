@@ -52,7 +52,7 @@ jobs:
           rm docker-openssl.sh || true
           cat >> docker-openssl.sh << EOF
           apk add perl make coreutils tar pkgconfig dpkg binutils
-          cd ${{ github.workspace }}/openssl
+          cd /workdir/openssl
           if [ "$GOARCH" == "mipsel" ] || [ "$GOARCH" == "mips" ] ;then
             ./Configure no-tests linux-mips32
           elif [ "$GOARCH" == "mips64el" ] || [ "$GOARCH" == "mips64" ] ;then
@@ -67,7 +67,7 @@ jobs:
            ./Configure no-tests linux-$GOARCH
           fi
           make clean && make all
-          cd ${{ github.workspace }}
+          cd /workdir
           export CFLAGS="-I /workdir/openssl/include"
           export LDFLAGS="-L /workdir/openssl"
           ./package/build-pkg.sh --platform linux --arch all --filearch x86_64-linux --outputdir /workdir/build
@@ -81,7 +81,7 @@ jobs:
         run: |
           rm docker-build.sh || true
           cat >> docker-build.sh << EOF
-          cd ${{ github.workspace }}/plugin/smartdns-ui
+          cd /workdir/plugin/smartdns-ui
           export OPENSSL_DIR=/workdir/openssl
           export OPENSSL_LIB_DIR="/workdir/openssl"
           export OPENSSL_INCLUDE_DIR="/workdir/openssl/include"
