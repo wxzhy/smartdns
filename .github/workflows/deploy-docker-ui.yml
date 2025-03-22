@@ -28,7 +28,8 @@ jobs:
   build: 
     strategy:
       matrix:
-        goarch: [x86_64, aarch64, armv7, powerpc64le]
+        goarch: [x86_64, aarch64]
+        # bindgen 似乎不支持armv7和powerpc64le
       fail-fast: false
     runs-on: ubuntu-latest
     env:
@@ -47,7 +48,7 @@ jobs:
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
           mkdir -p ${{ github.workspace }}/openssl
-          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/openssl-3.3.3.tar.gz -o openssl.tar.gz
+          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/openssl-3.2.4.tar.gz -o openssl.tar.gz
           tar -zxvf openssl.tar.gz --strip-components 1 -C openssl
           rm docker-openssl.sh || true
           cat >> docker-openssl.sh << EOF
@@ -88,7 +89,7 @@ jobs:
           export RUSTFLAGS='-C link-arg=-Wl,-rpath,./ -C target-feature=-crt-static'
           if  test "$GOARCH" = "armv7" ;then
             cargo build --release --target=armv7-unknown-linux-musleabihf
-            cp ./target/armv7-unknown-linux-musleabi/release/libsmartdns_ui.so ./
+            cp ./target/armv7-unknown-linux-musleabihf/release/libsmartdns_ui.so ./
           else
             cargo build --release --target=$GOARCH-unknown-linux-musl
             cp ./target/$GOARCH-unknown-linux-musl/release/libsmartdns_ui.so ./
@@ -97,7 +98,7 @@ jobs:
           musl-strip libsmartdns_ui.so
           EOF
           if  test "$GOARCH" = "armv7" ;then
-            docker run -i --rm -v ${{ github.workspace }}:/workdir messense/rust-musl-cross:armv7-musleabi sh /workdir/docker-build.sh
+            docker run -i --rm -v ${{ github.workspace }}:/workdir messense/rust-musl-cross:armv7-musleabihf sh /workdir/docker-build.sh
           else
             docker run -i --rm -v ${{ github.workspace }}:/workdir messense/rust-musl-cross:$GOARCH-musl sh /workdir/docker-build.sh
           fi
@@ -119,6 +120,12 @@ jobs:
           else
             docker buildx build --no-cache --platform linux/$GOARCH --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
           fi
+          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
+          if  test "$GOARCH" = "armv7" ;then
+            docker buildx build --no-cache --platform linux/arm/v7 --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
+          else
+            docker buildx build --no-cache --platform linux/$GOARCH --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
+          fi
   create-manifest:
     name: create docker manifest
     needs: build
@@ -130,4 +137,6 @@ jobs:
       - name: create manifest
         run: |
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
-          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64 pikuzheng/smartdns:ui-armv7 pikuzheng/smartdns:ui-ppc64le
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64
+          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64
