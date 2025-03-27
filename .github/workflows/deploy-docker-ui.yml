@@ -72,7 +72,6 @@ jobs:
           export CFLAGS="-I /workdir/openssl/include"
           export LDFLAGS="-L /workdir/openssl"
           ./package/build-pkg.sh --platform linux --arch all --filearch $GOARCH-linux --outputdir /workdir/build
-          strip src/smartdns
           EOF
           if  test "$GOARCH" = "armv7" ;then
             docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:armv7l-linux-musleabihf sh /workdir/docker-openssl.sh
