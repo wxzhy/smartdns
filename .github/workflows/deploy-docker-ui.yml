@@ -79,6 +79,11 @@ jobs:
           else
             docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/docker-openssl.sh
           fi
+      - name: build-nextjs
+        run: |
+          cd ${{ github.workspace }}
+          git clone https://github.com/pymumu/smartdns-webui.git
+          docker run -i --rm -v ${{ github.workspace }}:/workdir node:lts-alpine sh -c "cd /workdir/smartdns-webui && npm install && npm run build"
       - name: build-ui
         run: |
           rm docker-build.sh || true
@@ -109,6 +114,7 @@ jobs:
           ENV TZ="Asia/Shanghai"
           COPY ./src/smartdns /usr/sbin
           COPY ./openssl/libcrypto.so ./openssl/libssl.so ./plugin/smartdns-ui/libsmartdns_ui.so ./plugin/smartdns-ui/libgcc_s.so.1 /usr/lib
+          COPY ./smartdns-webui/out /wwwroot
           EXPOSE 53/udp 53/tcp 6080/tcp
           VOLUME "/etc/smartdns/"
           HEALTHCHECK --interval=5m CMD test $(nslookup dns.pub 127.0.0.1 |grep answer |wc -l) -gt 0
@@ -136,7 +142,7 @@ jobs:
           install: true
       - name: create manifest
         run: |
-          docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}'
+          docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}' && \
           docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64
-          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
-          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64
+          docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}' && \
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64 || true
