@@ -82,8 +82,8 @@ jobs:
       - name: build-nextjs
         run: |
           cd ${{ github.workspace }}
-          git clone https://github.com/pymumu/smartdns-webui.git
-          docker run -i --rm -v ${{ github.workspace }}:/workdir node:lts-alpine sh -c "cd /workdir/smartdns-webui && npm install && npm run build"
+          git clone https://github.com/PikuZheng/smartdns-webui.git
+          docker run -i --rm -v ${{ github.workspace }}:/workdir node:lts-alpine sh -c "cd /workdir/smartdns-webui && npm install && NODE_ENV=production npm run build --no-analytics"
       - name: build-ui
         run: |
           rm docker-build.sh || true
