@@ -49,6 +49,7 @@ jobs:
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
           mkdir -p ${{ github.workspace }}/openssl
           curl -sSL https://github.com/openssl/openssl/archive/refs/tags/openssl-3.3.3.tar.gz -o openssl.tar.gz
+          curl -sSL https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz -o openssl.tar.gz
           tar -zxvf openssl.tar.gz --strip-components 1 -C openssl
           rm docker-openssl.sh || true
           cat >> docker-openssl.sh << EOF
@@ -65,7 +66,7 @@ jobs:
           elif [ "$GOARCH" == "armv7" ] ;then
             ./Configure no-tests linux-armv4
           else
-           ./Configure no-tests linux-$GOARCH
+           ./Configure no-tests linux-$GOARCH enable-quic enable-ktls
           fi
           make clean && make all
           cd /workdir
@@ -107,8 +108,7 @@ jobs:
           FROM alpine:3.21
           ENV TZ="Asia/Shanghai"
           COPY ./src/smartdns /usr/sbin
-          COPY ./plugin/smartdns-ui/libsmartdns_ui.so /usr/lib
-          COPY ./plugin/smartdns-ui/libgcc_s.so.1 /usr/lib
+          COPY ./openssl/libcrypto.so ./openssl/libssl.so ./plugin/smartdns-ui/libsmartdns_ui.so ./plugin/smartdns-ui/libgcc_s.so.1 /usr/lib
           EXPOSE 53/udp 53/tcp 6080/tcp
           VOLUME "/etc/smartdns/"
           HEALTHCHECK --interval=5m CMD test $(nslookup dns.pub 127.0.0.1 |grep answer |wc -l) -gt 0
