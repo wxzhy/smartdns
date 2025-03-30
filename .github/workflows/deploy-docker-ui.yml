@@ -29,7 +29,7 @@ jobs:
     needs: get-version
     strategy:
       matrix:
-        goarch: [x86_64, aarch64]
+        goarch: [x86_64, aarch64, armv7]
         # bindgen 似乎不支持armv7和powerpc64le
       fail-fast: false
     runs-on: ubuntu-latest
@@ -49,7 +49,6 @@ jobs:
           #修改版本号
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
           mkdir -p ${{ github.workspace }}/openssl
-          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/openssl-3.3.3.tar.gz -o openssl.tar.gz
           curl -sSL https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz -o openssl.tar.gz
           tar -zxvf openssl.tar.gz --strip-components 1 -C openssl
           rm docker-openssl.sh || true
@@ -65,7 +64,7 @@ jobs:
           elif [ "$GOARCH" == "powerpc64le" ] ;then
             ./Configure no-tests linux-ppc64le
           elif [ "$GOARCH" == "armv7" ] ;then
-            ./Configure no-tests linux-armv4
+            ./Configure no-tests linux-armv4 enable-quic enable-ktls
           else
            ./Configure no-tests linux-$GOARCH enable-quic enable-ktls
           fi
@@ -88,13 +87,18 @@ jobs:
       - name: build-ui
         run: |
           rm docker-build.sh || true
-          cat >> docker-build.sh << EOF
+          cat >> docker-build.sh << 'EOF'
           cd /workdir/plugin/smartdns-ui
           export OPENSSL_DIR=/workdir/openssl
           export OPENSSL_LIB_DIR="/workdir/openssl"
           export OPENSSL_INCLUDE_DIR="/workdir/openssl/include"
           export RUSTFLAGS='-C link-arg=-Wl,-rpath,./ -C target-feature=-crt-static'
           if  test "$GOARCH" = "armv7" ;then
+            apt update && apt install -y software-properties-common
+            add-apt-repository universe && add-apt-repository multiverse
+            apt update && apt-get install -y libc6-dev-armhf-cross
+            export AWS_LC_SYS_INCLUDES=/usr/arm-linux-gnueabihf/include
+            sed -i '/\[dependencies\]/a aws-lc-sys = { version = "0.27.1", features = ["bindgen"] }' Cargo.toml
             cargo build --release --target=armv7-unknown-linux-musleabihf
             cp ./target/armv7-unknown-linux-musleabihf/release/libsmartdns_ui.so ./
           else
@@ -133,6 +137,30 @@ jobs:
           else
             docker buildx build --no-cache --platform linux/$GOARCH --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
           fi
+      - name: release ipk
+        run: |
+          cd ${{ github.workspace }}/package/openwrt
+          chmod +x make_openwrt_withui.sh
+          ./make_openwrt_withui.sh -o ${{ github.workspace }}/build --arch $GOARCH --ver ${{needs.get-version.outputs.CUR_VERSION}}
+      - name: general tag and release ipk
+        id: tag
+        run: |
+          cd ${{ github.workspace }}
+          echo "release_tag=${{needs.get-version.outputs.CUR_VERSION}}_with_ui" >> $GITHUB_OUTPUT
+          touch release.txt
+          echo "同步更新上游代码" >> release.txt
+          echo ${{ github.sha }} >> release.txt
+          echo "status=success" >> $GITHUB_OUTPUT
+      - name: Upload firmware to release
+        uses: softprops/action-gh-release@v1
+        if: steps.tag.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: |
+            ${{ github.workspace }}/build/*
   create-manifest:
     name: create docker manifest
     needs: build
@@ -144,6 +172,6 @@ jobs:
       - name: create manifest
         run: |
           docker login --username=${{ secrets.DOCKER_USERNAME }} --password='${{ secrets.DOCKER_PASSWORD }}' && \
-          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64 pikuzheng/smartdns:ui-armv7
           docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}' && \
-          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64 || true
+          docker buildx imagetools create -t pikuzheng/smartdns:ui -t pikuzheng/smartdns:ui-${{needs.get-version.outputs.CUR_VERSION}} pikuzheng/smartdns:ui-x86_64 pikuzheng/smartdns:ui-aarch64 pikuzheng/smartdns:ui-armv7 || true
