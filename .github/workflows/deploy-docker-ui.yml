@@ -101,11 +101,12 @@ jobs:
             sed -i '/\[dependencies\]/a aws-lc-sys = { version = "0.27.1", features = ["bindgen"] }' Cargo.toml
             cargo build --release --target=armv7-unknown-linux-musleabihf
             cp ./target/armv7-unknown-linux-musleabihf/release/libsmartdns_ui.so ./
+            cp /usr/local/musl/armv7-unknown-linux-musleabihf/lib/libgcc_s.so.1 ./
           else
             cargo build --release --target=$GOARCH-unknown-linux-musl
             cp ./target/$GOARCH-unknown-linux-musl/release/libsmartdns_ui.so ./
+            cp /usr/local/musl/$GOARCH-unknown-linux-musl/lib/libgcc_s.so.1 ./
           fi
-          cp /usr/local/musl/$GOARCH-unknown-linux-musl/lib/libgcc_s.so.1 ./
           musl-strip libsmartdns_ui.so
           EOF
           if  test "$GOARCH" = "armv7" ;then
