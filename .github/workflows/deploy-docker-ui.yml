@@ -87,7 +87,7 @@ jobs:
       - name: build-ui
         run: |
           rm docker-build.sh || true
-          cat >> docker-build.sh << 'EOF'
+          cat >> docker-build.sh << EOF
           cd /workdir/plugin/smartdns-ui
           export OPENSSL_DIR=/workdir/openssl
           export OPENSSL_LIB_DIR="/workdir/openssl"
