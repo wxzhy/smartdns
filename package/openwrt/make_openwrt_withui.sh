@@ -50,11 +50,12 @@ build()
 	cd $ROOT/
 	mkdir $ROOT/root/usr/sbin -p
 	mkdir $ROOT/root/etc/init.d -p
-	mkdir $ROOT/root/etc/smartdns/ -p
-	mkdir $ROOT/root/etc/smartdns/domain-set/ -p 
-	mkdir $ROOT/root/etc/smartdns/ip-set/ -p 
-	mkdir $ROOT/root/etc/smartdns/conf.d/ -p 
-	mkdir $ROOT/root/etc/smartdns/download/ -p 
+	mkdir $ROOT/root/etc/smartdns -p
+	mkdir $ROOT/root/etc/smartdns/domain-set -p 
+	mkdir $ROOT/root/etc/smartdns/ip-set -p 
+	mkdir $ROOT/root/etc/smartdns/conf.d -p 
+	mkdir $ROOT/root/etc/smartdns/download -p 
+	mkdir $ROOT/root/usr/lib -p
 	mkdir $ROOT/root/usr/share/smartdns/wwwroot -p
 
 	cp $SMARTDNS_CONF  $ROOT/root/etc/smartdns/
