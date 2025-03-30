@@ -64,10 +64,10 @@ build()
 	cp $DOMAIN_BLOCK_LIST $ROOT/root/etc/smartdns/
 	cp $DOMAIN_FORWARDING_LIST $ROOT/root/etc/smartdns/
 	cp $CURR_DIR/files/etc $ROOT/root/ -af
-	cp $SMARTDNS_UI_LIB $ROOT/root/usr/lib
-	cp $SMARTDNS_OPENSSL_DIR/libcrypto.so.3 $ROOT/root/usr/lib
-	cp $SMARTDNS_OPENSSL_DIR/libssl.so.3 $ROOT/root/usr/lib
-	cp -r $SMARTDNS_WEBUI_DIR $ROOT/root/usr/share/smartdns/wwwroot
+	cp $SMARTDNS_UI_LIB $ROOT/root/usr/lib/
+	cp $SMARTDNS_OPENSSL_DIR/libcrypto.so.3 $ROOT/root/usr/lib/
+	cp $SMARTDNS_OPENSSL_DIR/libssl.so.3 $ROOT/root/usr/lib/
+	cp -r $SMARTDNS_WEBUI_DIR/* $ROOT/root/usr/share/smartdns/wwwroot/
 	cp $SMARTDNS_BIN $ROOT/root/usr/sbin
 	if [ $? -ne 0 ]; then
 		echo "copy smartdns file failed."

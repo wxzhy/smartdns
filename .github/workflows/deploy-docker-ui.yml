@@ -79,6 +79,7 @@ jobs:
           else
             docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/docker-openssl.sh
           fi
+          rm ${{ github.workspace }}/build/*
       - name: build-nextjs
         run: |
           cd ${{ github.workspace }}
