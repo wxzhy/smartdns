@@ -98,6 +98,7 @@ build()
 
 	tar zcf $ROOT/data.tar.gz -C root --owner=0 --group=0 .
 	tar zcf $OUTPUTDIR/smartdns_with_ui.$VER.$FILEARCH.ipk --owner=0 --group=0 ./control.tar.gz ./data.tar.gz ./debian-binary
+	tar zcf $OUTPUTDIR/smartdns_with_ui.$VER.$FILEARCH.tar.gz  --owner=0 --group=0 $ROOT/root/usr
 	rm -fr $ROOT/
 }
 

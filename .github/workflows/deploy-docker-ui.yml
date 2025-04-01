@@ -143,7 +143,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}/package/openwrt
           chmod +x make_openwrt_withui.sh
-          ./make_openwrt_withui.sh -o ${{ github.workspace }}/build --arch $GOARCH --ver ${{needs.get-version.outputs.CUR_VERSION}}
+          ./make_openwrt_withui.sh -o ${{ github.workspace }}/build --arch all --filearch $GOARCH --ver ${{needs.get-version.outputs.CUR_VERSION}}
       - name: general tag and release ipk
         id: tag
         run: |
