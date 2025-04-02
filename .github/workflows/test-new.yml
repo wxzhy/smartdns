@@ -53,22 +53,22 @@ jobs:
           sed -i "s/VER=.*/VER=${{needs.get-version.outputs.CUR_VERSION}}/" ${{ github.workspace }}/package/build-pkg.sh
           
           mkdir -p openssl
-          curl -sSL https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1u.tar.gz -o openssl.tar.gz
+          curl -sSL https://github.com/openssl/openssl/releases/download/openssl-3.4.1/openssl-3.4.1.tar.gz -o openssl.tar.gz
           tar -zxvf openssl.tar.gz --strip-components 1 -C openssl
 
           cat >> docker-build.sh << EOF
           apk add perl make coreutils tar pkgconfig dpkg binutils
           cd /workdir/openssl
           if [ "$GOARCH" == "mipsel" ] || [ "$GOARCH" == "mips" ] ;then
-            ./Configure no-tests linux-mips32
+            ./Configure no-tests linux-mips32 enable-quic enable-ktls no-docs
           elif [ "$GOARCH" == "i686" ] ;then
-            ./Configure no-tests linux-x86
+            ./Configure no-tests linux-x86 enable-quic enable-ktls no-docs
           elif [ "$GOARCH" == "powerpc64le" ] ;then
-            ./Configure no-tests linux-ppc64le
+            ./Configure no-tests linux-ppc64le enable-quic enable-ktls no-docs
           elif [ "$GOARCH" == "armv7l" ] ;then
-            ./Configure no-tests linux-armv4
+            ./Configure no-tests linux-armv4 enable-quic enable-ktls no-docs
           else
-           ./Configure no-tests linux-$GOARCH
+           ./Configure no-tests linux-$GOARCH enable-quic enable-ktls no-docs
           fi
           make all
           cd /workdir
@@ -79,38 +79,21 @@ jobs:
           ./package/build-pkg.sh --platform openwrt --arch all --filearch $GOARCH-openwrt --static --outputdir /workdir/build
           ./package/build-pkg.sh --platform optware --arch all --filearch $GOARCH-optware --static --outputdir /workdir/build
           cp ./src/smartdns /workdir/build/smartdns-$GOARCH -a
-          patch -p0 src/Makefile Makefile.patch
+          export CFLAGS="-I /workdir/openssl/include -DFEATURE_CHECK_EDNS"
           ./package/build-pkg.sh --platform debian --arch all --filearch $GOARCH-debian-edns --static --outputdir /workdir/build
           ./package/build-pkg.sh --platform linux --arch all --filearch $GOARCH-linux-edns --static --outputdir /workdir/build
           ./package/build-pkg.sh --platform openwrt --arch all --filearch $GOARCH-openwrt-edns --static --outputdir /workdir/build
           ./package/build-pkg.sh --platform optware --arch all --filearch $GOARCH-optware-edns --static --outputdir /workdir/build
           cp ./src/smartdns /workdir/build/smartdns-$GOARCH-edns -a
           EOF
-
-          cat >> Makefile.patch << EOF
-          --- Makefile
-          +++ Makefile
-          @@ -27,6 +27,7 @@
-           ifdef VER
-           override CFLAGS += -DSMARTDNS_VERION='"\$(VER)"'
-           endif
-          +override CFLAGS += -DFEATURE_CHECK_EDNS
-          
-           CXXFLAGS=-O2 -g -Wall -std=c++11
-           override CXXFLAGS +=-Iinclude
-          EOF
-
+          sed -i 's|\($STRIP\)\s*-d\s*\($CODE_DIR/src/smartdns\)|\1 -s \2|' ./package/build-pkg.sh
           if [ "$GOARCH" == "armv7l" ] ;then
+            sed -i 's|^export STRIP.*|export STRIP=/armv7l-linux-musleabihf/bin/strip|' ./package/build-pkg.sh
             docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:armv7l-linux-musleabihf sh /workdir/docker-build.sh
           else
+            sed -i 's|^export STRIP.*|export STRIP=/$GOARCH-linux-musl/bin/strip|' ./package/build-pkg.sh
             docker run -i --rm -v ${{ github.workspace }}:/workdir muslcc/x86_64:$GOARCH-linux-musl sh /workdir/docker-build.sh
           fi
-
-#      - name: Upload To Artifact
-#        uses: actions/upload-artifact@v2
-#        with:
-#          path: ${{ github.workspace }}/build/
-
       - name: Generate release tag
         id: tag
         run: |
