@@ -64,9 +64,9 @@ jobs:
           elif [ "$GOARCH" == "powerpc64le" ] ;then
             ./Configure no-tests linux-ppc64le
           elif [ "$GOARCH" == "armv7" ] ;then
-            ./Configure no-tests linux-armv4 enable-quic enable-ktls no-docs
+            ./Configure no-tests linux-armv4 enable-quic enable-ktls
           else
-           ./Configure no-tests linux-$GOARCH enable-quic enable-ktls no-docs
+           ./Configure no-tests linux-$GOARCH enable-quic enable-ktls
           fi
           make clean && make all
           cd /workdir
