@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Clear cache
-      uses: MyAlbum/purge-cache@v1
+      uses: MyAlbum/purge-cache@v2
       with:
-        max-age: 1
+        max-age: 86400 
         token: ${{ secrets.TOKEN }}
 
     - name: Delete workflow runs
