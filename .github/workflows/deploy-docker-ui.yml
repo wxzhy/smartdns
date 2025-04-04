@@ -165,7 +165,9 @@ jobs:
             ${{ github.workspace }}/build/*
   create-manifest:
     name: create docker manifest
-    needs: build
+    needs: 
+      - build
+      - get-version
     runs-on: ubuntu-latest
     steps:
       - uses: docker/setup-buildx-action@v2
