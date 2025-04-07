@@ -19,7 +19,7 @@
 #ifndef _SMART_DNS_CLIENT_H
 #define _SMART_DNS_CLIENT_H
 
-#include "dns.h"
+#include "smartdns/dns.h"
 
 #ifdef __cplusplus
 extern "C" {
