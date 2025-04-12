@@ -119,6 +119,7 @@ jobs:
           cat >> Dockerfile.unknown << 'EOF'
           FROM alpine:3.21
           ENV TZ="Asia/Shanghai"
+          RUN apk add --no-cache tzdata
           COPY ./src/smartdns /usr/sbin
           COPY ./openssl/libcrypto.so ./openssl/libssl.so ./plugin/smartdns-ui/libsmartdns_ui.so ./plugin/smartdns-ui/libgcc_s.so.1 /usr/lib
           COPY ./smartdns-webui/out /wwwroot
