@@ -134,6 +134,9 @@ jobs:
           else
             docker buildx build --no-cache --platform linux/$GOARCH --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
           fi
+      - name: send to tencent cloud
+        continue-on-error: true
+        run: |
           docker login ccr.ccs.tencentyun.com --username=${{ secrets.CCR_USERNAME }} --password='${{ secrets.CCR_PASSWORD }}'
           if  test "$GOARCH" = "armv7" ;then
             docker buildx build --no-cache --platform linux/arm/v7 --push -t pikuzheng/smartdns:ui-$GOARCH -f Dockerfile.unknown .
