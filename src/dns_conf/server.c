@@ -73,6 +73,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		{"subnet-all-query-types", no_argument, NULL, 264}, /* send subnent for all query types.*/
 		{"fallback", no_argument, NULL, 265}, /* fallback */
 		{"alpn", required_argument, NULL, 266}, /* alpn */
+		{"http-version", required_argument, NULL, 267}, /* http version for curl */
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -94,6 +95,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 	server->httphost[0] = '\0';
 	server->tls_host_verify[0] = '\0';
 	server->proxyname[0] = '\0';
+	server->http_version[0] = '\0';
 	server->set_mark = -1;
 	server->drop_packet_latency_ms = drop_packet_latency_ms;
 	server->tcp_keepalive = tcp_keepalive;
@@ -278,6 +280,12 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 			safe_strncpy(server->alpn, optarg, DNS_MAX_ALPN_LEN);
 			break;
 		}
+		case 267: {
+			if (type == DNS_SERVER_CURL) {
+				safe_strncpy(server->http_version, optarg, sizeof(server->http_version));
+			}
+			break;
+		}
 		default:
 			if (optind > optind_last) {
 				tlog(TLOG_WARN, "unknown server option: %s at '%s:%d'.", argv[optind - 1], conf_get_conf_file(),
@@ -376,6 +384,15 @@ int _config_server_https(void *data, int argc, char *argv[])
 {
 	int ret = 0;
 	ret = _config_server(argc, argv, DNS_SERVER_HTTPS, DEFAULT_DNS_HTTPS_PORT);
+
+	return ret;
+}
+
+int _config_server_curl(void *data, int argc, char *argv[])
+{
+	int ret = 0;
+	tlog(TLOG_INFO, "Parsing server-curl configuration with %d arguments", argc);
+	ret = _config_server(argc, argv, DNS_SERVER_CURL, DEFAULT_DNS_HTTPS_PORT);
 
 	return ret;
 }

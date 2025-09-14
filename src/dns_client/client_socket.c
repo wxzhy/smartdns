@@ -17,6 +17,7 @@
  */
 
 #include "client_socket.h"
+#include "client_curl.h"
 #include "client_http3.h"
 #include "client_https.h"
 #include "client_mdns.h"
@@ -63,6 +64,10 @@ int _dns_client_create_socket(struct dns_server_info *server_info)
 		struct client_dns_server_flag_https *flag_https = NULL;
 		flag_https = &server_info->flags.https;
 		ret = _dns_client_create_socket_tls(server_info, flag_https->hostname, flag_https->alpn);
+	} else if (server_info->type == DNS_SERVER_CURL) {
+		struct client_dns_server_flag_curl *flag_curl = NULL;
+		flag_curl = &server_info->flags.curl;
+		ret = _dns_client_create_socket_curl(server_info, flag_curl->hostname);
 	} else if (server_info->type == DNS_SERVER_HTTP3) {
 		struct client_dns_server_flag_https *flag_https = NULL;
 		const char *alpn = "h3";
@@ -106,7 +111,7 @@ void _dns_client_close_socket_ext(struct dns_server_info *server_info, int no_de
 			list_for_each_entry_safe(conn_stream, tmp, &server_info->conn_stream_list, server_list)
 			{
 				if (conn_stream->quic_stream) {
-#if defined(OSSL_QUIC1_VERSION) && !defined (OPENSSL_NO_QUIC)
+#if defined(OSSL_QUIC1_VERSION) && !defined(OPENSSL_NO_QUIC)
 					SSL_stream_reset(conn_stream->quic_stream, NULL, 0);
 #endif
 					SSL_free(conn_stream->quic_stream);
@@ -122,17 +127,17 @@ void _dns_client_close_socket_ext(struct dns_server_info *server_info, int no_de
 				_dns_client_conn_stream_put(conn_stream);
 			}
 		}
-		
+
 		SSL_free(server_info->ssl);
 		server_info->ssl = NULL;
 		server_info->ssl_write_len = -1;
 	}
-	
+
 	if (server_info->bio_method) {
 		BIO_meth_free(server_info->bio_method);
 		server_info->bio_method = NULL;
 	}
-	
+
 	if (server_info->proxy) {
 		proxy_conn_free(server_info->proxy);
 		server_info->proxy = NULL;
@@ -143,7 +148,7 @@ void _dns_client_close_socket_ext(struct dns_server_info *server_info, int no_de
 	if (server_info->fd > 0) {
 		tlog(TLOG_DEBUG, "server %s:%d closed.", server_info->ip, server_info->port);
 	}
-	
+
 	server_info->fd = -1;
 	/* update send recv time */
 	time(&server_info->last_send);

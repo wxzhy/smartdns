@@ -400,6 +400,7 @@ struct dns_servers {
 	char proxyname[PROXY_NAME_LEN];
 	char ifname[MAX_INTERFACE_LEN];
 	char alpn[DNS_MAX_ALPN_LEN];
+	char http_version[16]; // "1.1" or "2"
 	struct dns_edns_client_subnet ipv4_ecs;
 	struct dns_edns_client_subnet ipv6_ecs;
 };
@@ -684,7 +685,7 @@ struct dns_config {
 	char bind_ca_key_file[DNS_MAX_PATH];
 	char bind_root_ca_key_file[DNS_MAX_PATH];
 	char bind_ca_key_pass[DNS_MAX_PATH];
-	int  bind_ca_validity_days;
+	int bind_ca_validity_days;
 	char need_cert;
 	int tcp_idle_time;
 	ssize_t cachesize;

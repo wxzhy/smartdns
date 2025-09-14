@@ -214,6 +214,23 @@ static int _smartdns_prepare_server_flags(struct client_dns_server_flags *flags,
 		safe_strncpy(flag_http->alpn, server->alpn, DNS_MAX_ALPN_LEN);
 		flag_http->skip_check_cert = server->skip_check_cert;
 	} break;
+	case DNS_SERVER_CURL: {
+		struct client_dns_server_flag_curl *flag_curl = &flags->curl;
+		if (server->spki[0] != 0) {
+			flag_curl->spi_len =
+				dns_client_spki_decode(server->spki, (unsigned char *)flag_curl->spki, sizeof(flag_curl->spki));
+			if (flag_curl->spi_len <= 0) {
+				tlog(TLOG_ERROR, "decode spki failed, %s:%d", server->server, server->port);
+				return -1;
+			}
+		}
+		safe_strncpy(flag_curl->hostname, server->hostname, sizeof(flag_curl->hostname));
+		safe_strncpy(flag_curl->path, server->path, sizeof(flag_curl->path));
+		safe_strncpy(flag_curl->httphost, server->httphost, sizeof(flag_curl->httphost));
+		safe_strncpy(flag_curl->tls_host_verify, server->tls_host_verify, sizeof(flag_curl->tls_host_verify));
+		safe_strncpy(flag_curl->http_version, server->http_version, sizeof(flag_curl->http_version));
+		flag_curl->skip_check_cert = server->skip_check_cert;
+	} break;
 	case DNS_SERVER_QUIC:
 	case DNS_SERVER_TLS: {
 		struct client_dns_server_flag_tls *flag_tls = &flags->tls;
@@ -410,7 +427,7 @@ static int _smartdns_create_cert(void)
 		unlink(dns_conf.bind_ca_key_file);
 		tlog(TLOG_WARN, "regenerate cert with root ca key %s", dns_conf.bind_root_ca_key_file);
 	}
-	
+
 	if (dns_conf_get_ddns_domain()[0] != 0) {
 		snprintf(ddns_san, sizeof(ddns_san), "DNS:%s", dns_conf_get_ddns_domain());
 	}

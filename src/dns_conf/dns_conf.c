@@ -137,6 +137,7 @@ static struct config_item _config_item[] = {
 	CONF_CUSTOM("server-tcp", _config_server_tcp, NULL),
 	CONF_CUSTOM("server-tls", _config_server_tls, NULL),
 	CONF_CUSTOM("server-https", _config_server_https, NULL),
+	CONF_CUSTOM("server-curl", _config_server_curl, NULL),
 	CONF_CUSTOM("server-h3", _config_server_http3, NULL),
 	CONF_CUSTOM("server-http3", _config_server_http3, NULL),
 	CONF_CUSTOM("server-quic", _config_server_quic, NULL),

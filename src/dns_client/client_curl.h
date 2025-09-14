@@ -16,23 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _DNS_CONF_SERVER_H_
-#define _DNS_CONF_SERVER_H_
+#ifndef _DNS_CLIENT_CURL_H_
+#define _DNS_CLIENT_CURL_H_
 
-#include "dns_conf.h"
-#include "smartdns/dns_conf.h"
+#include "dns_client.h"
+#include <sys/epoll.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif /*__cplusplus */
 
-int _config_server_udp(void *data, int argc, char *argv[]);
-int _config_server_tcp(void *data, int argc, char *argv[]);
-int _config_server_tls(void *data, int argc, char *argv[]);
-int _config_server_https(void *data, int argc, char *argv[]);
-int _config_server_curl(void *data, int argc, char *argv[]);
-int _config_server_quic(void *data, int argc, char *argv[]);
-int _config_server_http3(void *data, int argc, char *argv[]);
+int _dns_client_send_curl(struct dns_server_info *server_info, void *packet, unsigned short len);
+
+int _dns_client_process_curl(struct dns_server_info *server_info, struct epoll_event *event, unsigned long now);
+
+int _dns_client_create_socket_curl(struct dns_server_info *server_info, const char *hostname);
+
+void _dns_client_close_curl(struct dns_server_info *server_info);
 
 #ifdef __cplusplus
 }

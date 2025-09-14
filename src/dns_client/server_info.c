@@ -19,12 +19,12 @@
 #define _GNU_SOURCE
 
 #include "server_info.h"
+#include "client_socket.h"
 #include "client_tls.h"
 #include "conn_stream.h"
 #include "ecs.h"
 #include "group.h"
 #include "pending_server.h"
-#include "client_socket.h"
 
 #include "smartdns/fast_ping.h"
 #include "smartdns/lib/stringutil.h"
@@ -345,6 +345,19 @@ int _dns_client_server_add(const char *server_ip, const char *server_host, int p
 		sock_type = SOCK_STREAM;
 		skip_check_cert = flag_https->skip_check_cert;
 	} break;
+	case DNS_SERVER_CURL: {
+		struct client_dns_server_flag_curl *flag_curl = &flags->curl;
+		spki_data_len = flag_curl->spi_len;
+		if (flag_curl->httphost[0] == 0) {
+			if (server_host) {
+				safe_strncpy(flag_curl->httphost, server_host, DNS_MAX_CNAME_LEN);
+			} else {
+				set_http_host(server_ip, port, DEFAULT_DNS_HTTPS_PORT, flag_curl->httphost);
+			}
+		}
+		sock_type = SOCK_STREAM;
+		skip_check_cert = flag_curl->skip_check_cert;
+	} break;
 	case DNS_SERVER_QUIC: {
 		struct client_dns_server_flag_tls *flag_tls = &flags->tls;
 		spki_data_len = flag_tls->spi_len;
@@ -539,6 +552,9 @@ const char *_dns_server_get_type_string(dns_server_type_t type)
 		break;
 	case DNS_SERVER_HTTPS:
 		type_str = "https";
+		break;
+	case DNS_SERVER_CURL:
+		type_str = "curl";
 		break;
 	case DNS_SERVER_MDNS:
 		type_str = "mdns";

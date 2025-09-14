@@ -20,6 +20,7 @@
 
 #include "smartdns/util.h"
 
+#include "client_curl.h"
 #include "client_http3.h"
 #include "client_https.h"
 #include "client_mdns.h"
@@ -214,6 +215,9 @@ static int _dns_client_process(struct dns_server_info *server_info, struct epoll
 			   server_info->type == DNS_SERVER_QUIC || server_info->type == DNS_SERVER_HTTP3) {
 		/* receive from tls */
 		return _dns_client_process_tls(server_info, event, now);
+	} else if (server_info->type == DNS_SERVER_CURL) {
+		/* receive from curl */
+		return _dns_client_process_curl(server_info, event, now);
 	} else {
 		return -1;
 	}
@@ -329,6 +333,11 @@ int _dns_client_send_packet(struct dns_query_struct *query, void *packet, int le
 			case DNS_SERVER_HTTPS:
 				/* https query */
 				ret = _dns_client_send_https(server_info, packet_data, packet_data_len);
+				send_err = errno;
+				break;
+			case DNS_SERVER_CURL:
+				/* curl https query */
+				ret = _dns_client_send_curl(server_info, packet_data, packet_data_len);
 				send_err = errno;
 				break;
 			case DNS_SERVER_MDNS:
