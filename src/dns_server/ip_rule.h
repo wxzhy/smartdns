@@ -28,8 +28,19 @@ extern "C" {
 int _dns_server_process_ip_rule(struct dns_request *request, unsigned char *addr, int addr_len, dns_type_t addr_type,
 								int result_flag, struct dns_iplist_ip_addresses **alias);
 
+int _dns_server_process_ip_rule_ext(struct dns_request *request, unsigned char *addr, int addr_len,
+									dns_type_t addr_type, int result_flag, struct dns_iplist_ip_addresses **alias,
+									int *prefix_length);
+
 int _dns_server_process_ip_alias(struct dns_request *request, struct dns_iplist_ip_addresses *alias,
 								 unsigned char **paddrs, int *paddr_num, int max_paddr_num, int addr_len);
+
+int _dns_server_process_ip_prefix_alias(struct dns_request *request, struct ip_rule_prefix_alias *prefix_alias,
+										unsigned char *orig_addr, int addr_len, unsigned char **result_addr);
+
+int _dns_server_process_ip_prefix_alias_simple(struct dns_request *request, struct dns_iplist_ip_addresses *alias,
+											   unsigned char *orig_addr, int addr_len, int prefix_length,
+											   unsigned char **paddrs, int *paddr_num, int max_paddr_num);
 
 struct dns_client_rules *_dns_server_get_client_rules(struct sockaddr_storage *addr, socklen_t addr_len);
 #ifdef __cplusplus

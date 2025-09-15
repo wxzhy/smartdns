@@ -40,18 +40,38 @@ static int _dns_server_process_answer_A_IP(struct dns_request *request, char *cn
 	paddr_num = 1;
 
 	/* ip rule check */
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 4, DNS_T_A, result_flag, &alias);
+	int prefix_length = 0;
+	ip_check_result = _dns_server_process_ip_rule_ext(request, addr, 4, DNS_T_A, result_flag, &alias, &prefix_length);
 	if (ip_check_result == 0) {
 		/* match */
 		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
+	} else if (ip_check_result == -1) {
+		/* need process ip alias */
+		int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
+		if (ret != 0) {
+			return ret;
+		}
+	} else if (ip_check_result == -2) {
+		/* need process ip prefix alias */
+		tlog(TLOG_INFO, "answer: processing IPv4 prefix-alias for %d.%d.%d.%d with prefix_length=%d", addr[0], addr[1],
+			 addr[2], addr[3], prefix_length);
+		int ret = _dns_server_process_ip_prefix_alias_simple(request, alias, addr, DNS_RR_A_LEN, prefix_length, paddrs,
+															 &paddr_num, MAX_IP_NUM);
+		if (ret < 0) {
+			return ret;
+		}
+		// 如果ret > 0，说明成功生成了新的IP地址，继续处理paddrs
+		if (ret > 0 && paddr_num > 0) {
+			tlog(TLOG_INFO, "answer: prefix-alias generated %d new IP addresses", paddr_num);
+			for (int i = 0; i < paddr_num; i++) {
+				unsigned char *new_addr = paddrs[i];
+				tlog(TLOG_INFO, "answer: prefix-alias result[%d]: %d.%d.%d.%d", i, new_addr[0], new_addr[1],
+					 new_addr[2], new_addr[3]);
+			}
+		}
+	} else if (ip_check_result == -3) {
 		/* skip, nxdomain */
 		return ip_check_result;
-	}
-
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
-	if (ret != 0) {
-		return ret;
 	}
 
 	for (int i = 0; i < paddr_num; i++) {
@@ -110,18 +130,46 @@ static int _dns_server_process_answer_AAAA_IP(struct dns_request *request, char 
 	paddrs[paddr_num] = addr;
 	paddr_num = 1;
 
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 16, DNS_T_AAAA, result_flag, &alias);
+	int prefix_length = 0;
+	ip_check_result =
+		_dns_server_process_ip_rule_ext(request, addr, 16, DNS_T_AAAA, result_flag, &alias, &prefix_length);
 	if (ip_check_result == 0) {
 		/* match */
 		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
+	} else if (ip_check_result == -1) {
+		/* need process ip alias */
+		int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
+		if (ret != 0) {
+			return ret;
+		}
+	} else if (ip_check_result == -2) {
+		/* need process ip prefix alias */
+		tlog(TLOG_INFO,
+			 "answer: processing IPv6 prefix-alias for "
+			 "%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x with prefix_length=%d",
+			 addr[0], addr[1], addr[2], addr[3], addr[4], addr[5], addr[6], addr[7], addr[8], addr[9], addr[10],
+			 addr[11], addr[12], addr[13], addr[14], addr[15], prefix_length);
+		int ret = _dns_server_process_ip_prefix_alias_simple(request, alias, addr, DNS_RR_AAAA_LEN, prefix_length,
+															 paddrs, &paddr_num, MAX_IP_NUM);
+		if (ret < 0) {
+			return ret;
+		}
+		// 如果ret > 0，说明成功生成了新的IPv6地址，继续处理paddrs
+		if (ret > 0 && paddr_num > 0) {
+			tlog(TLOG_INFO, "answer: IPv6 prefix-alias generated %d new IP addresses", paddr_num);
+			for (int i = 0; i < paddr_num; i++) {
+				unsigned char *new_addr = paddrs[i];
+				tlog(TLOG_INFO,
+					 "answer: IPv6 prefix-alias result[%d]: "
+					 "%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x:%.2x%.2x",
+					 i, new_addr[0], new_addr[1], new_addr[2], new_addr[3], new_addr[4], new_addr[5], new_addr[6],
+					 new_addr[7], new_addr[8], new_addr[9], new_addr[10], new_addr[11], new_addr[12], new_addr[13],
+					 new_addr[14], new_addr[15]);
+			}
+		}
+	} else if (ip_check_result == -3) {
 		/* skip, nxdomain */
 		return ip_check_result;
-	}
-
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
-	if (ret != 0) {
-		return ret;
 	}
 
 	for (int i = 0; i < paddr_num; i++) {

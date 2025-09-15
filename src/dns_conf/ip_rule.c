@@ -274,6 +274,8 @@ int _config_ip_rule_add(const char *ip_cidr, enum ip_rule type, void *rule)
 	struct dns_ip_rules *add_ip_rules = NULL;
 	radix_node_t *node = NULL;
 
+	tlog(TLOG_INFO, "adding IP rule: %s, type=%d", ip_cidr, type);
+
 	if (ip_cidr == NULL) {
 		goto errout;
 	}
@@ -316,6 +318,7 @@ int _config_ip_rule_add(const char *ip_cidr, enum ip_rule type, void *rule)
 	ip_rules->rules[type] = rule;
 	_dns_ip_rule_get(rule);
 
+	tlog(TLOG_INFO, "successfully added IP rule: %s, type=%d", ip_cidr, type);
 	return 0;
 errout:
 	if (add_ip_rules) {
@@ -341,6 +344,9 @@ static void *_new_dns_ip_rule_ext(enum ip_rule ip_rule, int ext_size)
 		break;
 	case IP_RULE_ALIAS:
 		size = sizeof(struct ip_rule_alias);
+		break;
+	case IP_RULE_PREFIX_ALIAS:
+		size = sizeof(struct ip_rule_prefix_alias);
 		break;
 	default:
 		return NULL;
@@ -376,6 +382,13 @@ void _dns_ip_rule_put(struct dns_ip_rule *rule)
 				free(alias->ip_alias.ipaddr);
 				alias->ip_alias.ipaddr = NULL;
 				alias->ip_alias.ipaddr_num = 0;
+			}
+		} else if (rule->rule == IP_RULE_PREFIX_ALIAS) {
+			struct ip_rule_prefix_alias *prefix_alias = container_of(rule, struct ip_rule_prefix_alias, head);
+			if (prefix_alias->ip_alias.ipaddr) {
+				free(prefix_alias->ip_alias.ipaddr);
+				prefix_alias->ip_alias.ipaddr = NULL;
+				prefix_alias->ip_alias.ipaddr_num = 0;
 			}
 		}
 		free(rule);
@@ -422,6 +435,11 @@ int _config_ip_rule_alias_add_ip(const char *ip, struct ip_rule_alias *ip_alias)
 
 errout:
 	return -1;
+}
+
+int _config_ip_rule_prefix_alias_add_ip(const char *ip, struct ip_rule_prefix_alias *prefix_alias)
+{
+	return _config_ip_rule_alias_add_ip(ip, (struct ip_rule_alias *)prefix_alias);
 }
 
 int _config_blacklist_ip(void *data, int argc, char *argv[])

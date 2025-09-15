@@ -1,8 +1,0 @@
-nohup: 忽略输入
-[2025-09-14 09:17:58,458][NOTICE][       smartdns.c:633 ] smartdns starting...(Copyright (C) Nick Peng <pymumu@gmail.com>, build: 1.20250914-0917 (533af92))
-tlog: open log file /var/log/smartdns/smartdns.log failed, Permission denied
-[2025-09-14 09:17:58,460][ INFO][     dns_server.c:598 ] bind ip 127.0.0.1:6053, type 0
-[2025-09-14 09:17:58,463][ERROR][  server_socket.c:142 ] bind service 127.0.0.1:6053 failed, Address already in use
-[2025-09-14 09:17:58,463][ERROR][  server_socket.c:167 ] add server failed, host-ip: 127.0.0.1:6053, type: 2
-[2025-09-14 09:17:58,463][ERROR][     dns_server.c:894 ] create server socket failed.
-[2025-09-14 09:17:58,463][ERROR][       smartdns.c:675 ] start dns server failed.

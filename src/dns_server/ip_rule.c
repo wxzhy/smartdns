@@ -129,6 +129,10 @@ static int _dns_server_ip_rule_check(struct dns_request *request, struct dns_ip_
 		goto match;
 	}
 
+	if (ip_rules->rules[IP_RULE_PREFIX_ALIAS] != NULL) {
+		goto match;
+	}
+
 rule_not_found:
 	if (result_flag & DNSSERVER_FLAG_WHITELIST_IP) {
 		if (rule_flags == NULL) {
@@ -180,19 +184,34 @@ int _dns_server_process_ip_alias(struct dns_request *request, struct dns_iplist_
 	return 0;
 }
 
-int _dns_server_process_ip_rule(struct dns_request *request, unsigned char *addr, int addr_len, dns_type_t addr_type,
-								int result_flag, struct dns_iplist_ip_addresses **alias)
+int _dns_server_process_ip_rule_ext(struct dns_request *request, unsigned char *addr, int addr_len,
+									dns_type_t addr_type, int result_flag, struct dns_iplist_ip_addresses **alias,
+									int *prefix_length)
 {
 	struct dns_ip_rules *ip_rules = NULL;
 	int ret = 0;
 
+	if (addr_len == 4) {
+		tlog(TLOG_INFO, "checking IP rule for %d.%d.%d.%d", addr[0], addr[1], addr[2], addr[3]);
+	}
+
 	ip_rules = _dns_server_ip_rule_get(request, addr, addr_len, addr_type);
+	if (ip_rules == NULL) {
+		tlog(TLOG_DEBUG, "no IP rules found for this address");
+	} else {
+		tlog(TLOG_INFO, "found IP rules for address, checking types");
+	}
+
 	ret = _dns_server_ip_rule_check(request, ip_rules, result_flag);
 	if (ret != 0) {
 		return ret;
 	}
 
+	tlog(TLOG_DEBUG, "checking rule types - alias:%p, prefix_alias:%p", ip_rules->rules[IP_RULE_ALIAS],
+		 ip_rules->rules[IP_RULE_PREFIX_ALIAS]);
+
 	if (ip_rules->rules[IP_RULE_ALIAS] && alias != NULL) {
+		tlog(TLOG_INFO, "found regular alias rule for address");
 		if (request->no_ipalias == 0) {
 			struct ip_rule_alias *rule = container_of(ip_rules->rules[IP_RULE_ALIAS], struct ip_rule_alias, head);
 			*alias = &rule->ip_alias;
@@ -205,5 +224,134 @@ int _dns_server_process_ip_rule(struct dns_request *request, unsigned char *addr
 		return -1;
 	}
 
+	if (ip_rules->rules[IP_RULE_PREFIX_ALIAS] && alias != NULL) {
+		tlog(TLOG_INFO, "found prefix-alias rule for address");
+		if (request->no_ipalias == 0) {
+			struct ip_rule_prefix_alias *rule =
+				container_of(ip_rules->rules[IP_RULE_PREFIX_ALIAS], struct ip_rule_prefix_alias, head);
+			*alias = &rule->ip_alias;
+			if (prefix_length != NULL) {
+				*prefix_length = rule->prefix_length;
+			}
+			if (alias == NULL) {
+				return 0;
+			}
+			tlog(TLOG_INFO, "applying prefix-alias rule with prefix_length=%d", rule->prefix_length);
+		}
+
+		/* need process ip prefix alias */
+		return -2;
+	}
+
 	return 0;
+}
+
+int _dns_server_process_ip_rule(struct dns_request *request, unsigned char *addr, int addr_len, dns_type_t addr_type,
+								int result_flag, struct dns_iplist_ip_addresses **alias)
+{
+	return _dns_server_process_ip_rule_ext(request, addr, addr_len, addr_type, result_flag, alias, NULL);
+}
+
+int _dns_server_process_ip_prefix_alias_simple(struct dns_request *request, struct dns_iplist_ip_addresses *alias,
+											   unsigned char *orig_addr, int addr_len, int prefix_length,
+											   unsigned char **paddrs, int *paddr_num, int max_paddr_num)
+{
+	if (alias == NULL || orig_addr == NULL || paddrs == NULL || paddr_num == NULL) {
+		tlog(TLOG_DEBUG, "prefix_alias_simple: null parameter check failed");
+		return -1;
+	}
+
+	if (alias->ipaddr_num <= 0) {
+		tlog(TLOG_DEBUG, "prefix_alias_simple: no alias IPs configured");
+		return 0;
+	}
+
+	tlog(TLOG_INFO, "prefix_alias_simple: processing addr_len=%d, prefix_length=%d, alias_count=%d", addr_len,
+		 prefix_length, alias->ipaddr_num);
+
+	int addr_num = 0;
+
+	for (int i = 0; i < alias->ipaddr_num && addr_num < max_paddr_num; i++) {
+		if (alias->ipaddr[i].addr_len != addr_len) {
+			continue;
+		}
+
+		// 为新地址分配内存
+		unsigned char *new_addr = malloc(addr_len);
+		if (new_addr == NULL) {
+			continue;
+		}
+
+		// 复制原始地址
+		memcpy(new_addr, orig_addr, addr_len);
+
+		// 计算要替换的字节数
+		int prefix_bytes = prefix_length / 8;
+		int prefix_bits = prefix_length % 8;
+
+		// 替换前缀部分
+		if (prefix_bytes > 0 && prefix_bytes <= addr_len) {
+			memcpy(new_addr, alias->ipaddr[i].addr, prefix_bytes);
+		}
+
+		// 处理部分字节（如果有余数位）
+		if (prefix_bits > 0 && prefix_bytes < addr_len) {
+			unsigned char mask = 0xFF << (8 - prefix_bits);
+			new_addr[prefix_bytes] = (alias->ipaddr[i].addr[prefix_bytes] & mask) | (orig_addr[prefix_bytes] & (~mask));
+		}
+
+		paddrs[addr_num] = new_addr;
+		addr_num++;
+	}
+
+	*paddr_num = addr_num;
+	return addr_num > 0 ? 1 : 0;
+}
+
+int _dns_server_process_ip_prefix_alias(struct dns_request *request, struct ip_rule_prefix_alias *prefix_alias,
+										unsigned char *orig_addr, int addr_len, unsigned char **result_addr)
+{
+	if (prefix_alias == NULL || orig_addr == NULL || result_addr == NULL) {
+		return -1;
+	}
+
+	if (prefix_alias->ip_alias.ipaddr_num <= 0) {
+		return 0;
+	}
+
+	// 为结果分配内存
+	*result_addr = malloc(addr_len);
+	if (*result_addr == NULL) {
+		return -1;
+	}
+
+	// 复制原始地址
+	memcpy(*result_addr, orig_addr, addr_len);
+
+	// 查找匹配的目标前缀
+	for (int i = 0; i < prefix_alias->ip_alias.ipaddr_num; i++) {
+		if (prefix_alias->ip_alias.ipaddr[i].addr_len != addr_len) {
+			continue;
+		}
+
+		// 计算要替换的字节数
+		int prefix_bytes = prefix_alias->prefix_length / 8;
+		int prefix_bits = prefix_alias->prefix_length % 8;
+
+		// 替换前缀部分
+		if (prefix_bytes > 0 && prefix_bytes <= addr_len) {
+			memcpy(*result_addr, prefix_alias->ip_alias.ipaddr[i].addr, prefix_bytes);
+		}
+
+		// 处理部分字节（如果有余数位）
+		if (prefix_bits > 0 && prefix_bytes < addr_len) {
+			unsigned char mask = 0xFF << (8 - prefix_bits);
+			(*result_addr)[prefix_bytes] =
+				(prefix_alias->ip_alias.ipaddr[i].addr[prefix_bytes] & mask) | (orig_addr[prefix_bytes] & (~mask));
+		}
+
+		return 1; // 成功替换
+	}
+
+	return 0; // 没有找到匹配的前缀
 }

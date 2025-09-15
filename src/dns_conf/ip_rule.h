@@ -39,6 +39,7 @@ int _config_whitelist_ip(void *data, int argc, char *argv[]);
 int _config_ip_rules(void *data, int argc, char *argv[]);
 
 int _config_ip_rule_alias_add_ip(const char *ip, struct ip_rule_alias *ip_alias);
+int _config_ip_rule_prefix_alias_add_ip(const char *ip, struct ip_rule_prefix_alias *prefix_alias);
 int _config_ip_rule_add(const char *ip_cidr, enum ip_rule type, void *rule);
 
 void *_new_dns_ip_rule(enum ip_rule ip_rule);
