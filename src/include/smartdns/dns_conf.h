@@ -313,6 +313,7 @@ struct dns_https_record {
 struct dns_https_filter {
 	int no_ipv4hint;
 	int no_ipv6hint;
+	int no_ech;
 };
 
 struct dns_https_record_rule {
