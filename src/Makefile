@@ -70,8 +70,8 @@ STATIC = 1
 endif
 
 ifdef STATIC
- override CFLAGS += -DBUILD_STATIC
- override LDFLAGS += -lssl -lcrypto -lcurl -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -ldl -lm -static -rdynamic
+ override CFLAGS += -DBUILD_STATIC -flto
+ override LDFLAGS += -flto -lssl -lcrypto -lcurl -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -ldl -lm -lz -lnghttp2 -lbrotlidec -lbrotlicommon -lz -ljemalloc -static -rdynamic -Wl,--gc-sections
 else
  override LDFLAGS += -lssl -lcrypto -lcurl -lpthread -ldl -lm -rdynamic
 endif
@@ -99,6 +99,12 @@ $(SMARTDNS_TEST_LIB): $(TEST_OBJS)
 
 $(SMARTDNS_LIB): $(OBJS)
 	$(AR) rcs $@ $^
+
+release: $(BIN)
+	@echo "Creating release version..."
+	strip -s $(BIN)
+	upx --best --lzma $(BIN)
+	@echo "Release version '$(BIN)' created."
 
 clang-tidy:
 	clang-tidy -p=. $(LINT_OBJS:.o=.c) -- $(CFLAGS)
