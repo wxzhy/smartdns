@@ -70,7 +70,8 @@ STATIC = 1
 endif
 
 ifdef STATIC
- override CFLAGS += -DBUILD_STATIC -flto
+ override CC=musl-gcc
+ override CFLAGS += -DBUILD_STATIC -flto -ffunction-sections -fdata-sections
  override LDFLAGS += -flto -lssl -lcrypto -lcurl -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -ldl -lm -lz -lnghttp2 -lbrotlidec -lbrotlicommon -lz -ljemalloc -static -rdynamic -Wl,--gc-sections
 else
  override LDFLAGS += -lssl -lcrypto -lcurl -lpthread -ldl -lm -rdynamic
