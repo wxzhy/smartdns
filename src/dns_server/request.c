@@ -32,6 +32,9 @@
 #include "smartdns/dns_plugin.h"
 #include "smartdns/dns_stats.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 int _dns_server_has_bind_flag(struct dns_request *request, uint32_t flag)
 {
 	if (request->server_flags & flag) {
@@ -919,6 +922,231 @@ _dns_server_process_dns64_callback(struct dns_request *request, struct dns_reque
 	}
 
 	return DNS_CHILD_POST_SKIP;
+}
+
+static int _dns_server_ipv4_in_subnet(uint32_t ipv4_addr, prefix_t *prefix)
+{
+	if (prefix->family != AF_INET) {
+		return 0;
+	}
+
+	uint32_t mask = prefix->bitlen ? htonl(0xFFFFFFFFUL << (32 - prefix->bitlen)) : 0;
+	uint32_t subnet_addr = prefix->add.sin.s_addr;
+
+	return (ipv4_addr & mask) == (subnet_addr & mask);
+}
+
+static int _dns_server_generate_ipv6_from_rule(struct dns64_rule_item *rule, uint32_t ipv4_addr,
+											   unsigned char *ipv6_addr)
+{
+	memcpy(ipv6_addr, rule->ipv6_prefix, DNS_RR_AAAA_LEN);
+
+	uint32_t ipv4_host = ntohl(ipv4_addr);
+	uint32_t suffix_mask = (1U << rule->ipv4_suffix_len) - 1;
+	uint32_t ipv4_suffix = ipv4_host & suffix_mask;
+
+	if (rule->mode == DNS64_RULE_MODE_HEX) {
+		// Hex mode: convert to hex and embed in IPv6
+		uint16_t high_16 = (ipv4_suffix >> 16) & 0xFFFF;
+		uint16_t low_16 = ipv4_suffix & 0xFFFF;
+
+		// Put the suffix in the last 32 bits of IPv6 address
+		ipv6_addr[14] = (high_16 >> 8) & 0xFF;
+		ipv6_addr[15] = high_16 & 0xFF;
+		ipv6_addr[12] = (low_16 >> 8) & 0xFF;
+		ipv6_addr[13] = low_16 & 0xFF;
+	} else {
+		// Dec mode: convert suffix to decimal string, then treat as hex
+		char suffix_str[16];
+		snprintf(suffix_str, sizeof(suffix_str), "%u", ipv4_suffix);
+
+		// Parse the decimal string as hexadecimal
+		uint32_t hex_value = (uint32_t)strtoul(suffix_str, NULL, 16);
+
+		// Embed in IPv6 address (last 32 bits)
+		ipv6_addr[12] = (hex_value >> 24) & 0xFF;
+		ipv6_addr[13] = (hex_value >> 16) & 0xFF;
+		ipv6_addr[14] = (hex_value >> 8) & 0xFF;
+		ipv6_addr[15] = hex_value & 0xFF;
+	}
+
+	return 0;
+}
+
+static enum DNS_CHILD_POST_RESULT _dns_server_process_dns64_rule_callback(struct dns_request *request,
+																		  struct dns_request *child_request,
+																		  int is_first_resp)
+{
+	unsigned long bucket = 0;
+	struct dns_ip_address *addr_map = NULL;
+	struct hlist_node *tmp = NULL;
+	uint32_t key = 0;
+	int addr_len = 0;
+	struct dns64_rule_item *rule_item = NULL;
+	int rule_matched = 0;
+
+	tlog(TLOG_INFO, "DNS64-rule callback: domain=%s, child_qtype=%d, has_ip=%d", request->domain, child_request->qtype,
+		 child_request->has_ip);
+
+	if (child_request->qtype != DNS_T_A) {
+		tlog(TLOG_INFO, "DNS64-rule callback: skip - not A query");
+		return DNS_CHILD_POST_FAIL;
+	}
+
+	if (child_request->has_cname == 1) {
+		safe_strncpy(request->cname, child_request->cname, sizeof(request->cname));
+		request->has_cname = 1;
+		request->ttl_cname = child_request->ttl_cname;
+	}
+
+	if (child_request->has_ip == 0 && request->has_ip == 0) {
+		request->rcode = child_request->rcode;
+		if (child_request->has_soa) {
+			memcpy(&request->soa, &child_request->soa, sizeof(struct dns_soa));
+			request->has_soa = 1;
+			return DNS_CHILD_POST_SKIP;
+		}
+
+		if (request->has_soa == 0) {
+			_dns_server_setup_soa(request);
+			request->has_soa = 1;
+		}
+		return DNS_CHILD_POST_FAIL;
+	}
+
+	// Process DNS64 rules for each IPv4 address
+	pthread_mutex_lock(&child_request->ip_map_lock);
+	hash_for_each_safe(child_request->ip_map, bucket, tmp, addr_map, node)
+	{
+		struct dns_ip_address *new_addr_map = NULL;
+
+		if (addr_map->addr_type != DNS_T_A) {
+			continue;
+		}
+
+		uint32_t ipv4_addr = *(uint32_t *)addr_map->ip_addr;
+		struct in_addr in_addr_temp;
+		in_addr_temp.s_addr = ipv4_addr;
+		tlog(TLOG_INFO, "DNS64-rule callback: checking IPv4 %s", inet_ntoa(in_addr_temp));
+
+		// Check if this IPv4 address matches any DNS64 rule
+		list_for_each_entry(rule_item, &request->conf->dns64_rule.rules, list)
+		{
+			tlog(TLOG_INFO, "DNS64-rule callback: testing rule for subnet");
+			if (!_dns_server_ipv4_in_subnet(ipv4_addr, &rule_item->ipv4_prefix)) {
+				tlog(TLOG_INFO, "DNS64-rule callback: IPv4 does not match rule");
+				continue;
+			}
+
+			tlog(TLOG_INFO, "DNS64-rule callback: IPv4 matches rule!");
+			rule_matched = 1;
+
+			// Create new IPv6 address
+			new_addr_map = malloc(sizeof(struct dns_ip_address));
+			if (new_addr_map == NULL) {
+				tlog(TLOG_ERROR, "malloc failed.\n");
+				pthread_mutex_unlock(&child_request->ip_map_lock);
+				return DNS_CHILD_POST_FAIL;
+			}
+			memset(new_addr_map, 0, sizeof(struct dns_ip_address));
+
+			new_addr_map->addr_type = DNS_T_AAAA;
+			addr_len = DNS_RR_AAAA_LEN;
+
+			_dns_server_generate_ipv6_from_rule(rule_item, ipv4_addr, new_addr_map->ip_addr);
+			new_addr_map->ping_time = addr_map->ping_time;
+
+			key = jhash(new_addr_map->ip_addr, addr_len, 0);
+			key = jhash(&new_addr_map->addr_type, sizeof(new_addr_map->addr_type), key);
+			pthread_mutex_lock(&request->ip_map_lock);
+			hash_add(request->ip_map, &new_addr_map->node, key);
+			pthread_mutex_unlock(&request->ip_map_lock);
+
+			tlog(TLOG_DEBUG, "dns64-rule matched: %s generated IPv6 address", request->domain);
+			break; // Only use the first matching rule
+		}
+	}
+	pthread_mutex_unlock(&child_request->ip_map_lock);
+
+	if (rule_matched) {
+		// Set the first generated IPv6 address as the main address
+		if (request->has_ip == 0) {
+			pthread_mutex_lock(&request->ip_map_lock);
+			hash_for_each(request->ip_map, bucket, addr_map, node)
+			{
+				if (addr_map->addr_type == DNS_T_AAAA) {
+					memcpy(request->ip_addr, addr_map->ip_addr, DNS_RR_AAAA_LEN);
+					request->ip_ttl = child_request->ip_ttl;
+					request->has_ip = 1;
+					request->rcode = child_request->rcode;
+					break;
+				}
+			}
+			pthread_mutex_unlock(&request->ip_map_lock);
+		}
+		return DNS_CHILD_POST_SKIP;
+	}
+
+	// No rule matched, return DNS_CHILD_POST_FAIL to indicate no processing
+	return DNS_CHILD_POST_FAIL;
+}
+
+int _dns_server_process_dns64_rule(struct dns_request *request)
+{
+	tlog(TLOG_INFO, "DNS64-rule check: domain=%s, qtype=%d", request->domain, request->qtype);
+
+	if (request->qtype != DNS_T_AAAA) {
+		tlog(TLOG_INFO, "DNS64-rule skip: not AAAA query");
+		return 0;
+	}
+
+	if (request->dualstack_selection_query == 1) {
+		tlog(TLOG_INFO, "DNS64-rule skip: dualstack selection query");
+		return 0;
+	}
+
+	if (request->conf->dns64_rule.enable == 0) {
+		tlog(TLOG_INFO, "DNS64-rule skip: not enabled");
+		return 0;
+	}
+
+	/* Check domain-specific no-dns64-rule flag */
+	struct dns_rule_flags *rule_flag = _dns_server_get_dns_rule(request, DOMAIN_RULE_FLAGS);
+	if (rule_flag != NULL && _dns_server_is_dns_rule_extract_match(request, DOMAIN_RULE_FLAGS) != 0) {
+		if (rule_flag->flags & DOMAIN_FLAG_NO_DNS64_RULE) {
+			tlog(TLOG_INFO, "DNS64-rule skip: domain-specific no-dns64-rule flag set for %s", request->domain);
+			return 0;
+		}
+	}
+
+	tlog(TLOG_INFO, "DNS64-rule processing: query %s with dns64-rule", request->domain);
+
+	struct dns_request *child_request =
+		_dns_server_new_child_request(request, request->domain, DNS_T_A, _dns_server_process_dns64_rule_callback);
+	if (child_request == NULL) {
+		tlog(TLOG_ERROR, "malloc failed.\n");
+		return -1;
+	}
+
+	request->dualstack_selection = 0;
+	child_request->prefetch_flags |= PREFETCH_FLAGS_NO_DUALSTACK;
+	request->request_wait++;
+	int ret = _dns_server_do_query(child_request, 0);
+	if (ret != 0) {
+		request->request_wait--;
+		tlog(TLOG_ERROR, "do query %s type %d failed.\n", request->domain, request->qtype);
+		goto errout;
+	}
+
+	_dns_server_request_release_complete(child_request, 0);
+	return 0;
+
+errout:
+	if (child_request) {
+		request->child_request = NULL;
+		_dns_server_request_release(child_request);
+	}
+	return -1;
 }
 
 int _dns_server_process_dns64(struct dns_request *request)

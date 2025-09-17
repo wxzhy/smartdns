@@ -345,6 +345,10 @@ int _dns_server_do_query(struct dns_request *request, int skip_notify_event)
 	list_add_tail(&request->list, &server.request_list);
 	pthread_mutex_unlock(&server.request_list_lock);
 
+	if (_dns_server_process_dns64_rule(request) != 0) {
+		goto errout;
+	}
+
 	if (_dns_server_process_dns64(request) != 0) {
 		goto errout;
 	}

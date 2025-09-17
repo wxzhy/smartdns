@@ -213,13 +213,13 @@ static int _config_rule_group_setup_value(struct dns_conf_group_info *group_info
 	group_rule->dns_dualstack_ip_selection_threshold = 10;
 	group_rule->dns_rr_ttl_min = 600;
 	group_rule->dns_serve_expired = 1;
-	
+
 	if (group_rule->dns_prefetch == 1) {
 		group_rule->dns_serve_expired_ttl = 24 * 3600 * 7;
 	} else {
 		group_rule->dns_serve_expired_ttl = 24 * 3600;
 	}
-	
+
 	group_rule->dns_serve_expired_reply_ttl = 3;
 	group_rule->dns_max_reply_ip_num = DNS_MAX_REPLY_IP_NUM;
 	group_rule->dns_response_mode = dns_conf.default_response_mode;
@@ -372,6 +372,10 @@ struct dns_conf_group *_config_rule_group_new(const char *group_name)
 	rule_group->address_rule.ipv4 = New_Radix();
 	rule_group->address_rule.ipv6 = New_Radix();
 
+	/* Initialize DNS64 rule */
+	INIT_LIST_HEAD(&rule_group->dns64_rule.rules);
+	rule_group->dns64_rule.enable = 0;
+
 	key = hash_string(group_name);
 	hash_add(dns_conf_rule.group, &rule_group->node, key);
 	dns_conf_rule.group_num++;
@@ -387,6 +391,15 @@ static void _config_rule_group_remove(struct dns_conf_group *rule_group)
 	Destroy_Radix(rule_group->address_rule.ipv4, _config_ip_iter_free, NULL);
 	Destroy_Radix(rule_group->address_rule.ipv6, _config_ip_iter_free, NULL);
 	free(rule_group->soa_table);
+
+	/* Clean up DNS64 rules */
+	struct dns64_rule_item *rule_item, *tmp_rule;
+	list_for_each_entry_safe(rule_item, tmp_rule, &rule_group->dns64_rule.rules, list)
+	{
+		list_del(&rule_item->list);
+		free(rule_item);
+	}
+
 	dns_conf_rule.group_num--;
 
 	free(rule_group);

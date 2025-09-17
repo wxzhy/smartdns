@@ -75,6 +75,7 @@ void _dns_server_check_set_passthrough(struct dns_request *request);
 
 int _dns_server_process_special_query(struct dns_request *request);
 
+int _dns_server_process_dns64_rule(struct dns_request *request);
 int _dns_server_process_dns64(struct dns_request *request);
 
 void _dns_server_setup_dns_group_name(struct dns_request *request, const char **server_group_name);

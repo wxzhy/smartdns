@@ -174,8 +174,7 @@ static int _config_setup_domain_key(const char *domain, char *domain_key, int do
 
 	int len = strlen(domain);
 	domain_len = len;
-	if (!domain_key || !domain_key_len || domain_key_max_len <= 0 || 
-		len + 3 > domain_key_max_len) {
+	if (!domain_key || !domain_key_len || domain_key_max_len <= 0 || len + 3 > domain_key_max_len) {
 		tlog(TLOG_ERROR, "invalid parameters or domain too long: %s (max %d)", domain, domain_key_max_len - 3);
 		return -1;
 	}
@@ -395,11 +394,11 @@ int _config_domain_rule_remove(const char *domain, enum domain_rule type)
 		return -1;
 	}
 
-	struct dns_domain_rule *domain_rule = art_search(&_config_current_rule_group()->domain_rule.tree,
-													   (unsigned char *)domain_key, len);
+	struct dns_domain_rule *domain_rule =
+		art_search(&_config_current_rule_group()->domain_rule.tree, (unsigned char *)domain_key, len);
 	if (domain_rule == NULL) {
 		tlog(TLOG_ERROR, "domain %s not found", domain);
-		return -1;		
+		return -1;
 	}
 
 	if (domain_rule->rules[type] == NULL) {
@@ -408,7 +407,7 @@ int _config_domain_rule_remove(const char *domain, enum domain_rule type)
 
 	_dns_rule_put(domain_rule->rules[type]);
 	domain_rule->rules[type] = NULL;
-	
+
 	return 0;
 }
 
@@ -537,6 +536,11 @@ static int _conf_domain_rule_enable_cache(const char *domain)
 static int _conf_domain_rule_no_ipalias(const char *domain)
 {
 	return _config_domain_rule_flag_set(domain, DOMAIN_FLAG_NO_IPALIAS, 0);
+}
+
+static int _conf_domain_rule_no_dns64_rule(const char *domain)
+{
+	return _config_domain_rule_flag_set(domain, DOMAIN_FLAG_NO_DNS64_RULE, 0);
 }
 
 static int _conf_domain_rule_response_mode(char *domain, const char *mode)
@@ -691,6 +695,7 @@ int _config_domain_rules(void *data, int argc, char *argv[])
 		{"no-cache", no_argument, NULL, 256},
 		{"no-ip-alias", no_argument, NULL, 257},
 		{"enable-cache", no_argument, NULL, 258},
+		{"no-dns64-rule", no_argument, NULL, 259},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -897,6 +902,14 @@ int _config_domain_rules(void *data, int argc, char *argv[])
 		case 258: {
 			if (_conf_domain_rule_enable_cache(domain) != 0) {
 				tlog(TLOG_ERROR, "set enable-cache rule failed.");
+				goto errout;
+			}
+
+			break;
+		}
+		case 259: {
+			if (_conf_domain_rule_no_dns64_rule(domain) != 0) {
+				tlog(TLOG_ERROR, "set no-dns64-rule rule failed.");
 				goto errout;
 			}
 

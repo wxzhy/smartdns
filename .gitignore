@@ -12,3 +12,4 @@ package/*.gz
 package/*.ipk
 config/*
 *.log
+logs/*
