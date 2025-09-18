@@ -34,6 +34,7 @@ int _config_ip_rule_set_each(const char *ip_set, set_rule_add_func callback, voi
 
 int _config_blacklist_ip(void *data, int argc, char *argv[]);
 int _config_bogus_nxdomain(void *data, int argc, char *argv[]);
+int _config_bogus_noerror(void *data, int argc, char *argv[]);
 int _config_ip_ignore(void *data, int argc, char *argv[]);
 int _config_whitelist_ip(void *data, int argc, char *argv[]);
 int _config_ip_rules(void *data, int argc, char *argv[]);

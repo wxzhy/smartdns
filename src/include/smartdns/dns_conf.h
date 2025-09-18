@@ -144,11 +144,13 @@ typedef enum {
 #define DOMAIN_FLAG_ADDR_HTTPS_SOA (1 << 21)
 #define DOMAIN_FLAG_ADDR_HTTPS_IGN (1 << 22)
 #define DOMAIN_FLAG_NO_DNS64_RULE (1 << 23)
+#define DOMAIN_FLAG_NO_BOGUS_NOERROR (1 << 24)
 
 #define IP_RULE_FLAG_BLACKLIST (1 << 0)
 #define IP_RULE_FLAG_WHITELIST (1 << 1)
 #define IP_RULE_FLAG_BOGUS (1 << 2)
 #define IP_RULE_FLAG_IP_IGNORE (1 << 3)
+#define IP_RULE_FLAG_BOGUS_NOERROR (1 << 4)
 
 #define SERVER_FLAG_EXCLUDE_DEFAULT (1 << 0)
 #define SERVER_FLAG_HITCHHIKING (1 << 1)
@@ -171,6 +173,7 @@ typedef enum {
 #define BIND_FLAG_NO_RULES (1 << 15)
 #define BIND_FLAG_ACL (1 << 16)
 #define BIND_FLAG_NO_DNS64_RULE (1 << 17)
+#define BIND_FLAG_NO_BOGUS_NOERROR (1 << 18)
 
 enum response_mode_type {
 	DNS_RESPONSE_MODE_FIRST_PING_IP = 0,

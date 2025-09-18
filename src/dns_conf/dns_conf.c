@@ -216,6 +216,7 @@ static struct config_item _config_item[] = {
 	CONF_CUSTOM("ip-rules", _config_ip_rules, NULL),
 	CONF_CUSTOM("ip-set", _config_ip_set, NULL),
 	CONF_CUSTOM("bogus-nxdomain", _config_bogus_nxdomain, NULL),
+	CONF_CUSTOM("bogus-noerror", _config_bogus_noerror, NULL),
 	CONF_CUSTOM("ignore-ip", _config_ip_ignore, NULL),
 	CONF_CUSTOM("edns-client-subnet", _conf_edns_client_subnet, NULL),
 	CONF_CUSTOM("domain-rules", _config_domain_rules, NULL),

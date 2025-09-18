@@ -19,6 +19,8 @@
 #include "ip_rule.h"
 #include "dns_server.h"
 #include "neighbor.h"
+#include "request.h"
+#include "rules.h"
 #include "soa.h"
 
 struct dns_client_rules *_dns_server_get_client_rules(struct sockaddr_storage *addr, socklen_t addr_len)
@@ -109,6 +111,32 @@ static int _dns_server_ip_rule_check(struct dns_request *request, struct dns_ip_
 				request->force_soa = 1;
 				_dns_server_setup_soa(request);
 				goto nxdomain;
+			}
+
+			if (rule_flags->flags & IP_RULE_FLAG_BOGUS_NOERROR) {
+				/* Check bind-level skip-bogus-noerror or no-bogus-noerror flags */
+				if (_dns_server_has_bind_flag(request, BIND_FLAG_NO_BOGUS_NOERROR) == 0) {
+					goto skip_bogus_noerror;
+				}
+
+				/* Check domain-specific no-bogus-noerror flag */
+				struct dns_rule_flags *domain_rule_flag = _dns_server_get_dns_rule(request, DOMAIN_RULE_FLAGS);
+				if (domain_rule_flag != NULL &&
+					_dns_server_is_dns_rule_extract_match(request, DOMAIN_RULE_FLAGS) != 0) {
+					if (domain_rule_flag->flags & DOMAIN_FLAG_NO_BOGUS_NOERROR) {
+						goto skip_bogus_noerror;
+					}
+				}
+
+				request->rcode = DNS_RC_NOERROR;
+				request->has_soa = 1;
+				request->force_soa = 1;
+				_dns_server_setup_soa(request);
+				goto nxdomain;
+
+			skip_bogus_noerror:
+				/* Skip bogus-noerror processing */
+				;
 			}
 
 			/* blacklist-ip */

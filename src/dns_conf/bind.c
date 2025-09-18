@@ -216,6 +216,7 @@ static int _config_bind_ip(int argc, char *argv[], DNS_BIND_TYPE type)
 		{"ipset", required_argument, NULL, 255},
 		{"nftset", required_argument, NULL, 256},
 		{"no-dns64-rule", no_argument, NULL, 257},
+		{"no-bogus-noerror", no_argument, NULL, 258},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -345,6 +346,10 @@ static int _config_bind_ip(int argc, char *argv[], DNS_BIND_TYPE type)
 		}
 		case 257: {
 			server_flag |= BIND_FLAG_NO_DNS64_RULE;
+			break;
+		}
+		case 258: {
+			server_flag |= BIND_FLAG_NO_BOGUS_NOERROR;
 			break;
 		}
 		default:

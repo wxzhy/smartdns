@@ -19,6 +19,7 @@
 #include "ip_rule.h"
 #include "dns_conf_group.h"
 #include "ip_alias.h"
+#include "prefix_alias.h"
 #include "set_file.h"
 #include "smartdns/util.h"
 
@@ -84,8 +85,10 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 		{"blacklist-ip", no_argument, NULL, 'b'},
 		{"whitelist-ip", no_argument, NULL, 'w'},
 		{"bogus-nxdomain", no_argument, NULL, 'n'},
+		{"bogus-noerror", no_argument, NULL, 'o'},
 		{"ignore-ip", no_argument, NULL, 'i'},
 		{"ip-alias", required_argument, NULL, 'a'},
+		{"prefix-alias", required_argument, NULL, 'p'},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -123,6 +126,12 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 			}
 			break;
 		}
+		case 'o': {
+			if (_config_ip_rule_flag_set(ip_cidr, IP_RULE_FLAG_BOGUS_NOERROR, 0) != 0) {
+				goto errout;
+			}
+			break;
+		}
 		case 'i': {
 			if (_config_ip_rule_flag_set(ip_cidr, IP_RULE_FLAG_IP_IGNORE, 0) != 0) {
 				goto errout;
@@ -131,6 +140,33 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 		}
 		case 'a': {
 			if (_conf_ip_alias(ip_cidr, optarg) != 0) {
+				goto errout;
+			}
+			break;
+		}
+		case 'p': {
+			/* Parse prefix-alias arguments: target_ip and prefix_length are separate arguments */
+			char *target_ip = optarg;
+
+			/* Get the next argument for prefix_length */
+			if (optind >= argc) {
+				tlog(TLOG_ERROR, "prefix-alias requires prefix length argument");
+				goto errout;
+			}
+
+			char *prefix_str = argv[optind];
+			optind++; /* Move to next argument */
+
+			int prefix_length = atoi(prefix_str);
+
+			if (prefix_length <= 0) {
+				tlog(TLOG_ERROR, "invalid prefix length: %s", prefix_str);
+				goto errout;
+			}
+
+			tlog(TLOG_INFO, "ip-rules prefix-alias: %s -> %s with prefix-length %d", ip_cidr, target_ip, prefix_length);
+
+			if (_conf_prefix_alias(ip_cidr, target_ip, prefix_length) != 0) {
 				goto errout;
 			}
 			break;
@@ -476,6 +512,15 @@ int _config_whitelist_ip(void *data, int argc, char *argv[])
 	}
 
 	return _config_ip_rule_flag_set(argv[1], IP_RULE_FLAG_WHITELIST, 0);
+}
+
+int _config_bogus_noerror(void *data, int argc, char *argv[])
+{
+	if (argc <= 1) {
+		return -1;
+	}
+
+	return _config_ip_rule_flag_set(argv[1], IP_RULE_FLAG_BOGUS_NOERROR, 0);
 }
 
 void _config_ip_iter_free(radix_node_t *node, void *cbctx)
