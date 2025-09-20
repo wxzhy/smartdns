@@ -572,7 +572,14 @@ static int _smartdns_init_log(void)
 
 	unsigned int tlog_flag = TLOG_NONBLOCK;
 	if (enable_log_screen == 1) {
-		tlog_flag |= TLOG_SCREEN_COLOR;
+		tlog_flag |= TLOG_SCREEN;
+	}
+
+	if (dns_conf.log_color_mode) {
+		tlog_flag |= TLOG_SEGMENT;
+		if (enable_log_screen) {
+			tlog_flag |= TLOG_SCREEN_COLOR;
+		}
 	}
 
 	if (dns_conf.log_syslog) {
