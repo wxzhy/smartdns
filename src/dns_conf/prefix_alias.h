@@ -16,26 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _DNS_SERVER_IP_RULE_
-#define _DNS_SERVER_IP_RULE_
+#ifndef _DNS_CONF_PREFIX_ALIAS_H_
+#define _DNS_CONF_PREFIX_ALIAS_H_
 
-#include "dns_server.h"
+#include "dns_conf.h"
+#include "smartdns/dns_conf.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif /*__cplusplus */
 
-int _dns_server_process_ip_rule(struct dns_request *request, unsigned char *addr, int addr_len, dns_type_t addr_type,
-								int result_flag, struct dns_iplist_ip_addresses **alias, struct ip_rule_prefix_alias **prefix_alias);
+int _conf_prefix_alias(const char *ip_cidr, const char *ips, int prefix_len);
 
-int _dns_server_process_ip_alias(struct dns_request *request, struct dns_iplist_ip_addresses *alias,
-								 unsigned char **paddrs, int *paddr_num, int max_paddr_num, int addr_len);
+int _config_prefix_alias(void *data, int argc, char *argv[]);
 
-int _dns_server_process_prefix_alias(struct dns_request *request, unsigned char *original_addr, int addr_len,
-									 struct ip_rule_prefix_alias *prefix_rule,
-									 unsigned char **paddrs, int *paddr_num, int max_paddr_num);
-
-struct dns_client_rules *_dns_server_get_client_rules(struct sockaddr_storage *addr, socklen_t addr_len);
 #ifdef __cplusplus
 }
 #endif /*__cplusplus */

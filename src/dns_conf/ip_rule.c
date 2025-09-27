@@ -19,6 +19,7 @@
 #include "ip_rule.h"
 #include "dns_conf_group.h"
 #include "ip_alias.h"
+#include "prefix_alias.h"
 #include "set_file.h"
 #include "smartdns/util.h"
 
@@ -86,6 +87,7 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 		{"bogus-nxdomain", no_argument, NULL, 'n'},
 		{"ignore-ip", no_argument, NULL, 'i'},
 		{"ip-alias", required_argument, NULL, 'a'},
+		{"prefix-alias", required_argument, NULL, 'p'},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -133,6 +135,55 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 			if (_conf_ip_alias(ip_cidr, optarg) != 0) {
 				goto errout;
 			}
+			break;
+		}
+		case 'p': {
+			// Parse format: "ip1,ip2,ip3 prefix_len" or just get prefix_len from next argument
+			char *ips_str = optarg;
+			int prefix_len = 0;
+			char *saved_ptr = NULL;
+			char *token = NULL;
+			char *ips_copy = strdup(optarg);
+			
+			if (ips_copy == NULL) {
+				goto errout;
+			}
+			
+			// Try to parse as "ips prefix_len" format
+			token = strtok_r(ips_copy, " \t", &saved_ptr);
+			if (token != NULL) {
+				char *prefix_len_str = strtok_r(NULL, " \t", &saved_ptr);
+				if (prefix_len_str != NULL) {
+					// Found prefix_len in the same argument
+					prefix_len = atoi(prefix_len_str);
+					ips_str = token;
+				} else {
+					// No prefix_len found, will be in next argument
+					free(ips_copy);
+					ips_copy = NULL;
+				}
+			}
+			
+			// If prefix_len not found in optarg, it should be the next argument
+			if (prefix_len == 0) {
+				if (optind < argc) {
+					prefix_len = atoi(argv[optind]);
+					optind++; // consume the next argument
+				}
+			}
+			
+			if (prefix_len <= 0) {
+				tlog(TLOG_ERROR, "invalid prefix length: %d", prefix_len);
+				if (ips_copy) free(ips_copy);
+				goto errout;
+			}
+			
+			if (_conf_prefix_alias(ip_cidr, (ips_copy && token) ? token : ips_str, prefix_len) != 0) {
+				if (ips_copy) free(ips_copy);
+				goto errout;
+			}
+			
+			if (ips_copy) free(ips_copy);
 			break;
 		}
 		default:
@@ -342,6 +393,9 @@ static void *_new_dns_ip_rule_ext(enum ip_rule ip_rule, int ext_size)
 	case IP_RULE_ALIAS:
 		size = sizeof(struct ip_rule_alias);
 		break;
+	case IP_RULE_PREFIX_ALIAS:
+		size = sizeof(struct ip_rule_prefix_alias);
+		break;
 	default:
 		return NULL;
 	}
@@ -376,6 +430,13 @@ void _dns_ip_rule_put(struct dns_ip_rule *rule)
 				free(alias->ip_alias.ipaddr);
 				alias->ip_alias.ipaddr = NULL;
 				alias->ip_alias.ipaddr_num = 0;
+			}
+		} else if (rule->rule == IP_RULE_PREFIX_ALIAS) {
+			struct ip_rule_prefix_alias *prefix_alias = container_of(rule, struct ip_rule_prefix_alias, head);
+			if (prefix_alias->prefix_alias.ipaddr) {
+				free(prefix_alias->prefix_alias.ipaddr);
+				prefix_alias->prefix_alias.ipaddr = NULL;
+				prefix_alias->prefix_alias.ipaddr_num = 0;
 			}
 		}
 		free(rule);
@@ -422,6 +483,58 @@ int _config_ip_rule_alias_add_ip(const char *ip, struct ip_rule_alias *ip_alias)
 
 errout:
 	return -1;
+}
+
+int _config_ip_rule_prefix_alias_add_ip(const char *ip, struct ip_rule_prefix_alias *prefix_alias)
+{
+	struct sockaddr_storage addr;
+	socklen_t addr_len = sizeof(addr);
+	int ret = 0;
+	
+	if (ip == NULL || prefix_alias == NULL) {
+		return -1;
+	}
+
+	memset(&addr, 0, sizeof(addr));
+	ret = getaddr_by_host(ip, (struct sockaddr *)&addr, &addr_len);
+	if (ret != 0) {
+		tlog(TLOG_ERROR, "ip is invalid: %s", ip);
+		return -1;
+	}
+
+	/* Expand the ipaddr array */
+	prefix_alias->prefix_alias.ipaddr = realloc(prefix_alias->prefix_alias.ipaddr, 
+		sizeof(struct dns_iplist_ip_address_prefix) * (prefix_alias->prefix_alias.ipaddr_num + 1));
+	if (prefix_alias->prefix_alias.ipaddr == NULL) {
+		prefix_alias->prefix_alias.ipaddr_num = 0;
+		return -1;
+	}
+
+	struct dns_iplist_ip_address_prefix *new_addr = 
+		&prefix_alias->prefix_alias.ipaddr[prefix_alias->prefix_alias.ipaddr_num];
+
+	if (addr.ss_family == AF_INET) {
+		struct sockaddr_in *addr_in = (struct sockaddr_in *)&addr;
+		memcpy(new_addr->ipv4_addr, &addr_in->sin_addr, DNS_RR_A_LEN);
+		new_addr->addr_len = DNS_RR_A_LEN;
+		new_addr->prefix_len = prefix_alias->prefix_len;
+	} else if (addr.ss_family == AF_INET6) {
+		struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)&addr;
+		if (IN6_IS_ADDR_V4MAPPED(&addr_in6->sin6_addr)) {
+			memcpy(new_addr->ipv4_addr, addr_in6->sin6_addr.s6_addr + 12, DNS_RR_A_LEN);
+			new_addr->addr_len = DNS_RR_A_LEN;
+			new_addr->prefix_len = prefix_alias->prefix_len;
+		} else {
+			memcpy(new_addr->ipv6_addr, &addr_in6->sin6_addr, DNS_RR_AAAA_LEN);
+			new_addr->addr_len = DNS_RR_AAAA_LEN;
+			new_addr->prefix_len = prefix_alias->prefix_len;
+		}
+	} else {
+		return -1;
+	}
+
+	prefix_alias->prefix_alias.ipaddr_num++;
+	return 0;
 }
 
 int _config_blacklist_ip(void *data, int argc, char *argv[])

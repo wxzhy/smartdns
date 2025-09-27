@@ -35,24 +35,34 @@ static int _dns_server_process_answer_A_IP(struct dns_request *request, char *cn
 	unsigned char *paddrs[MAX_IP_NUM];
 	int paddr_num = 0;
 	struct dns_iplist_ip_addresses *alias = NULL;
+	struct ip_rule_prefix_alias *prefix_rule = NULL;
 
 	paddrs[paddr_num] = addr;
 	paddr_num = 1;
 
 	/* ip rule check */
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 4, DNS_T_A, result_flag, &alias);
-	if (ip_check_result == 0) {
-		/* match */
-		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
-		/* skip, nxdomain */
+	ip_check_result = _dns_server_process_ip_rule(request, addr, 4, DNS_T_A, result_flag, &alias, &prefix_rule);
+	if (ip_check_result == -3) {
+		/* nxdomain */
 		return ip_check_result;
 	}
 
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
-	if (ret != 0) {
-		return ret;
+	if (ip_check_result == -1) {
+		/* process ip alias */
+		int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
+		if (ret != 0) {
+			return ret;
+		}
+	} else if (ip_check_result == -2) {
+		/* process prefix alias */
+		if (prefix_rule) {
+			int ret = _dns_server_process_prefix_alias(request, addr, 4, prefix_rule, paddrs, &paddr_num, MAX_IP_NUM);
+			if (ret != 0) {
+				return ret;
+			}
+		}
 	}
+	/* ip_check_result == 0: normal processing continues */
 
 	for (int i = 0; i < paddr_num; i++) {
 		unsigned char *paddr = paddrs[i];
@@ -105,24 +115,34 @@ static int _dns_server_process_answer_AAAA_IP(struct dns_request *request, char 
 	int ip_check_result = 0;
 	unsigned char *paddrs[MAX_IP_NUM];
 	struct dns_iplist_ip_addresses *alias = NULL;
+	struct ip_rule_prefix_alias *prefix_rule = NULL;
 	int paddr_num = 0;
 
 	paddrs[paddr_num] = addr;
 	paddr_num = 1;
 
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 16, DNS_T_AAAA, result_flag, &alias);
-	if (ip_check_result == 0) {
-		/* match */
-		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
-		/* skip, nxdomain */
+	ip_check_result = _dns_server_process_ip_rule(request, addr, 16, DNS_T_AAAA, result_flag, &alias, &prefix_rule);
+	if (ip_check_result == -3) {
+		/* nxdomain */
 		return ip_check_result;
 	}
 
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
-	if (ret != 0) {
-		return ret;
+	if (ip_check_result == -1) {
+		/* process ip alias */
+		int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
+		if (ret != 0) {
+			return ret;
+		}
+	} else if (ip_check_result == -2) {
+		/* process prefix alias */
+		if (prefix_rule) {
+			int ret = _dns_server_process_prefix_alias(request, addr, 16, prefix_rule, paddrs, &paddr_num, MAX_IP_NUM);
+			if (ret != 0) {
+				return ret;
+			}
+		}
 	}
+	/* ip_check_result == 0: normal processing continues */
 
 	for (int i = 0; i < paddr_num; i++) {
 		unsigned char *paddr = paddrs[i];

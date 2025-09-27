@@ -96,6 +96,7 @@ enum domain_rule {
 enum ip_rule {
 	IP_RULE_FLAGS = 0,
 	IP_RULE_ALIAS = 1,
+	IP_RULE_PREFIX_ALIAS = 2,
 	IP_RULE_MAX,
 };
 
@@ -607,6 +608,27 @@ struct ip_rule_flags {
 struct ip_rule_alias {
 	struct dns_ip_rule head;
 	struct dns_iplist_ip_addresses ip_alias;
+};
+
+struct dns_iplist_ip_address_prefix {
+	int addr_len;
+	int prefix_len;
+	union {
+		unsigned char ipv4_addr[DNS_RR_A_LEN];
+		unsigned char ipv6_addr[DNS_RR_AAAA_LEN];
+		unsigned char addr[0];
+	};
+};
+
+struct dns_iplist_ip_addresses_prefix {
+	int ipaddr_num;
+	struct dns_iplist_ip_address_prefix *ipaddr;
+};
+
+struct ip_rule_prefix_alias {
+	struct dns_ip_rule head;
+	struct dns_iplist_ip_addresses_prefix prefix_alias;
+	int prefix_len;
 };
 
 struct dns_ip_set_name {
