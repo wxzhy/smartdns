@@ -487,7 +487,7 @@ struct dns_conf_group {
 	struct dns_conf_domain_rule domain_rule;
 	struct dns_conf_address_rule address_rule;
 	uint8_t *soa_table;
-	struct list_head dns64_rule_list;
+	radix_tree_t *dns64_rule_tree;
 	/* === AUTO COPY FIELD BEGIN === */
 	char copy_data_section_begin[0];
 	struct dns_conf_ipset_nftset ipset_nftset;

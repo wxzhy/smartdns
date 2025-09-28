@@ -35,6 +35,10 @@ int _dns_server_process_prefix_alias(struct dns_request *request, unsigned char 
 									 struct ip_rule_prefix_alias *prefix_rule,
 									 unsigned char **paddrs, int *paddr_num, int max_paddr_num);
 
+int _dns_server_apply_prefix_alias(unsigned char *original_addr, int addr_len, 
+								   struct dns_iplist_ip_address_prefix *prefix_addr,
+								   unsigned char *result_addr);
+
 struct dns_client_rules *_dns_server_get_client_rules(struct sockaddr_storage *addr, socklen_t addr_len);
 #ifdef __cplusplus
 }

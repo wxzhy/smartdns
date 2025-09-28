@@ -70,7 +70,7 @@ int _dns_server_is_dns64_rule_request(struct dns_request *request)
 	}
 
 	/* Check if there are any DNS64-rule configurations */
-	if (list_empty(&request->conf->dns64_rule_list)) {
+	if (request->conf->dns64_rule_tree == NULL) {
 		return 0;
 	}
 

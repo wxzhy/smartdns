@@ -103,59 +103,45 @@ int dns64_rule_convert_ipv4_to_ipv6(uint32_t ipv4_addr, const unsigned char *ipv
  */
 struct dns64_rule *dns64_rule_find_match(struct dns_conf_group *conf_group, uint32_t ipv4_addr)
 {
-	struct dns64_rule *rule;
-	uint32_t ipv4_host;
-	uint32_t network_mask;
-
+	prefix_t prefix;
+	radix_node_t *node = NULL;
+	struct dns64_rule *rule = NULL;
+	
 	if (conf_group == NULL) {
 		tlog(TLOG_ERROR, "dns64_rule_find_match: conf_group is NULL");
 		return NULL;
 	}
 
-	tlog(TLOG_INFO, "dns64_rule_find_match: conf_group=%p, checking dns64_rule_list", conf_group);
-	
-	// Check if dns64_rule_list is empty
-	if (list_empty(&conf_group->dns64_rule_list)) {
-		tlog(TLOG_INFO, "dns64_rule_find_match: dns64_rule_list is empty");
+	if (conf_group->dns64_rule_tree == NULL) {
+		tlog(TLOG_INFO, "dns64_rule_find_match: dns64_rule_tree is NULL");
 		return NULL;
 	}
-	
-	tlog(TLOG_INFO, "dns64_rule_find_match: dns64_rule_list is not empty");
 
-	ipv4_host = ntohl(ipv4_addr);
-	
-	tlog(TLOG_INFO, "dns64_rule_find_match: searching for IPv4 %u.%u.%u.%u (0x%08x)", 
-		 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
-		 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF, ipv4_host);
-
-	list_for_each_entry(rule, &conf_group->dns64_rule_list, list) {
-		// Create network mask
-		if (rule->ipv4_prefix_len == 0) {
-			network_mask = 0;
-		} else {
-			network_mask = 0xFFFFFFFFU << (32 - rule->ipv4_prefix_len);
-		}
-
-		uint32_t rule_network = ntohl(rule->ipv4_network);
-		
-		tlog(TLOG_INFO, "dns64_rule_find_match: checking rule network 0x%08x/%d, mask 0x%08x", 
-			 rule_network, rule->ipv4_prefix_len, network_mask);
-		tlog(TLOG_INFO, "dns64_rule_find_match: (0x%08x & 0x%08x) == (0x%08x & 0x%08x) -> %s", 
-			 ipv4_host, network_mask, rule_network, network_mask,
-			 ((ipv4_host & network_mask) == (rule_network & network_mask)) ? "MATCH" : "NO MATCH");
-		
-		if ((ipv4_host & network_mask) == (rule_network & network_mask)) {
-			tlog(TLOG_INFO, "dns64_rule_find_match: found matching rule for IPv4 %u.%u.%u.%u", 
-				 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
-				 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
-			return rule;
-		}
+	// Convert IPv4 address to prefix for radix tree lookup
+	if (prefix_from_blob((unsigned char *)&ipv4_addr, sizeof(ipv4_addr), sizeof(ipv4_addr) * 8, &prefix) == NULL) {
+		tlog(TLOG_ERROR, "dns64_rule_find_match: failed to create prefix from IPv4 address");
+		return NULL;
 	}
 
-	tlog(TLOG_DEBUG, "dns64_rule_find_match: no matching rule found for IPv4 %u.%u.%u.%u", 
-		 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
-		 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
-	return NULL;
+	// Use radix tree for O(log n) lookup
+	node = radix_search_best(conf_group->dns64_rule_tree, &prefix);
+	if (node == NULL) {
+		uint32_t ipv4_host = ntohl(ipv4_addr);
+		tlog(TLOG_DEBUG, "dns64_rule_find_match: no matching rule found for IPv4 %u.%u.%u.%u", 
+			 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
+			 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
+		return NULL;
+	}
+
+	rule = (struct dns64_rule *)node->data;
+	if (rule) {
+		uint32_t ipv4_host = ntohl(ipv4_addr);
+		tlog(TLOG_INFO, "dns64_rule_find_match: found matching rule for IPv4 %u.%u.%u.%u", 
+			 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
+			 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
+	}
+
+	return rule;
 }
 
 /* Apply dns64-rule to convert A record to AAAA records
@@ -397,8 +383,54 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 		goto errout;
 	}
 
-	// Add rule to the group
-	list_add_tail(&rule->list, &conf_group->dns64_rule_list);
+	// Add rule to the radix tree
+	prefix_t radix_prefix;
+	radix_node_t *node = NULL;
+	
+	// Create prefix for radix tree insertion
+	if (prefix_from_blob((unsigned char *)&rule->ipv4_network, sizeof(rule->ipv4_network), 
+						 rule->ipv4_prefix_len, &radix_prefix) == NULL) {
+		tlog(TLOG_ERROR, "dns64-rule: failed to create radix prefix");
+		// Free allocated prefix nodes
+		struct dns64_rule_prefix *prefix, *tmp;
+		list_for_each_entry_safe(prefix, tmp, &rule->prefix_list, list) {
+			list_del(&prefix->list);
+			free(prefix);
+		}
+		free(rule);
+		free(prefix_str);
+		goto errout;
+	}
+
+	// Insert rule into radix tree
+	node = radix_lookup(conf_group->dns64_rule_tree, &radix_prefix);
+	if (node == NULL) {
+		tlog(TLOG_ERROR, "dns64-rule: failed to insert rule into radix tree");
+		// Free allocated prefix nodes
+		struct dns64_rule_prefix *prefix, *tmp;
+		list_for_each_entry_safe(prefix, tmp, &rule->prefix_list, list) {
+			list_del(&prefix->list);
+			free(prefix);
+		}
+		free(rule);
+		free(prefix_str);
+		goto errout;
+	}
+	
+	// If there's already a rule for this network, replace it
+	if (node->data) {
+		struct dns64_rule *old_rule = (struct dns64_rule *)node->data;
+		// Free old rule's prefix nodes
+		struct dns64_rule_prefix *prefix, *tmp;
+		list_for_each_entry_safe(prefix, tmp, &old_rule->prefix_list, list) {
+			list_del(&prefix->list);
+			free(prefix);
+		}
+		free(old_rule);
+	}
+	
+	// Set the new rule as node data
+	node->data = rule;
 
 	tlog(TLOG_INFO, "Added dns64-rule for %s with %d IPv6 prefixes, remove_prefix_len=%d, mode=%s", 
 		 ipv4_subnet, prefix_count, rule->remove_prefix_len, mode_str);
