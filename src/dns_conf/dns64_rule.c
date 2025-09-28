@@ -108,10 +108,25 @@ struct dns64_rule *dns64_rule_find_match(struct dns_conf_group *conf_group, uint
 	uint32_t network_mask;
 
 	if (conf_group == NULL) {
+		tlog(TLOG_ERROR, "dns64_rule_find_match: conf_group is NULL");
 		return NULL;
 	}
 
+	tlog(TLOG_INFO, "dns64_rule_find_match: conf_group=%p, checking dns64_rule_list", conf_group);
+	
+	// Check if dns64_rule_list is empty
+	if (list_empty(&conf_group->dns64_rule_list)) {
+		tlog(TLOG_INFO, "dns64_rule_find_match: dns64_rule_list is empty");
+		return NULL;
+	}
+	
+	tlog(TLOG_INFO, "dns64_rule_find_match: dns64_rule_list is not empty");
+
 	ipv4_host = ntohl(ipv4_addr);
+	
+	tlog(TLOG_INFO, "dns64_rule_find_match: searching for IPv4 %u.%u.%u.%u (0x%08x)", 
+		 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
+		 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF, ipv4_host);
 
 	list_for_each_entry(rule, &conf_group->dns64_rule_list, list) {
 		// Create network mask
@@ -123,11 +138,23 @@ struct dns64_rule *dns64_rule_find_match(struct dns_conf_group *conf_group, uint
 
 		uint32_t rule_network = ntohl(rule->ipv4_network);
 		
+		tlog(TLOG_INFO, "dns64_rule_find_match: checking rule network 0x%08x/%d, mask 0x%08x", 
+			 rule_network, rule->ipv4_prefix_len, network_mask);
+		tlog(TLOG_INFO, "dns64_rule_find_match: (0x%08x & 0x%08x) == (0x%08x & 0x%08x) -> %s", 
+			 ipv4_host, network_mask, rule_network, network_mask,
+			 ((ipv4_host & network_mask) == (rule_network & network_mask)) ? "MATCH" : "NO MATCH");
+		
 		if ((ipv4_host & network_mask) == (rule_network & network_mask)) {
+			tlog(TLOG_INFO, "dns64_rule_find_match: found matching rule for IPv4 %u.%u.%u.%u", 
+				 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
+				 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
 			return rule;
 		}
 	}
 
+	tlog(TLOG_DEBUG, "dns64_rule_find_match: no matching rule found for IPv4 %u.%u.%u.%u", 
+		 (ipv4_host >> 24) & 0xFF, (ipv4_host >> 16) & 0xFF, 
+		 (ipv4_host >> 8) & 0xFF, ipv4_host & 0xFF);
 	return NULL;
 }
 
@@ -139,28 +166,79 @@ struct dns64_rule *dns64_rule_find_match(struct dns_conf_group *conf_group, uint
  * returns: number of IPv6 addresses generated, or -1 on error
  */
 int dns64_rule_apply(struct dns_conf_group *conf_group, uint32_t ipv4_addr, 
-                     unsigned char ipv6_results[][16], int max_results)
+                     struct dns64_result *result)
 {
 	struct dns64_rule *rule;
+	struct dns64_rule_prefix *prefix;
+	struct dns64_converted_address *addr_node;
+	unsigned char ipv6_result[16];
 	int count = 0;
-	int i;
 
+	/* CRITICAL DEBUGGING - Add obvious log at start */
+	printf("$$$ DNS64_RULE_APPLY CALLED $$$\n");
+	fflush(stdout);
+
+	if (result == NULL) {
+		tlog(TLOG_ERROR, "dns64_rule_apply: result is NULL");
+		return -1;
+	}
+
+	// Initialize result
+	result->count = 0;
+	result->addresses = NULL;
+
+	tlog(TLOG_ERROR, "dns64_rule_apply: called with conf_group=%p, ipv4_addr=0x%08x", conf_group, ipv4_addr);
+	
 	rule = dns64_rule_find_match(conf_group, ipv4_addr);
 	if (rule == NULL) {
+		tlog(TLOG_ERROR, "dns64_rule_apply: no matching rule found for IPv4");
 		return 0; // No matching rule found
 	}
 
+	tlog(TLOG_ERROR, "dns64_rule_apply: found matching rule, processing prefixes");
+
 	// Generate IPv6 addresses for each prefix in the rule
-	for (i = 0; i < rule->prefix_count && count < max_results; i++) {
-		if (dns64_rule_convert_ipv4_to_ipv6(ipv4_addr, rule->ipv6_prefixes[i], 
+	list_for_each_entry(prefix, &rule->prefix_list, list) {
+		if (dns64_rule_convert_ipv4_to_ipv6(ipv4_addr, prefix->ipv6_prefix, 
 		                                    rule->remove_prefix_len, rule->mode, 
-		                                    ipv6_results[count]) == 0) {
+		                                    ipv6_result) == 0) {
+			// Allocate new address node
+			addr_node = malloc(sizeof(struct dns64_converted_address));
+			if (addr_node == NULL) {
+				// Free allocated nodes on error
+				dns64_result_free(result);
+				return -1;
+			}
+			
+			memcpy(addr_node->ipv6_addr, ipv6_result, 16);
+			addr_node->next = result->addresses;
+			result->addresses = addr_node;
 			count++;
 		}
 	}
 
+	result->count = count;
 	tlog(TLOG_INFO, "dns64-rule: converted IPv4 to %d IPv6 address(es)", count);
 	return count;
+}
+
+void dns64_result_free(struct dns64_result *result)
+{
+	struct dns64_converted_address *addr, *next;
+	
+	if (result == NULL) {
+		return;
+	}
+	
+	addr = result->addresses;
+	while (addr != NULL) {
+		next = addr->next;
+		free(addr);
+		addr = next;
+	}
+	
+	result->count = 0;
+	result->addresses = NULL;
 }
 
 int _config_dns64_rule(void *data, int argc, char *argv[])
@@ -177,7 +255,6 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 	void *p = NULL;
 	int prefix_len = 0;
 	int prefix_count = 0;
-	int i = 0;
 
 	if (argc < 5) {
 		tlog(TLOG_ERROR, "invalid parameter, usage: dns64-rule ipv4-subnet ipv6-prefix1[,ipv6-prefix2,...] prefix-length mode");
@@ -204,7 +281,7 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 		goto errout;
 	}
 
-	if (ipv4_prefix.bitlen <= 0 || ipv4_prefix.bitlen > 32) {
+	if (ipv4_prefix.bitlen < 0 || ipv4_prefix.bitlen > 32) {
 		tlog(TLOG_ERROR, "dns64-rule: ipv4 subnet %s is not valid", ipv4_subnet);
 		goto errout;
 	}
@@ -227,27 +304,6 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 		goto errout;
 	}
 
-	// Count prefixes
-	prefix_str = strdup(ipv6_prefixes);
-	if (prefix_str == NULL) {
-		tlog(TLOG_ERROR, "dns64-rule: out of memory");
-		goto errout;
-	}
-
-	char *temp_str = prefix_str;
-	while (*temp_str) {
-		if (*temp_str == ',') {
-			prefix_count++;
-		}
-		temp_str++;
-	}
-	prefix_count++; // Add one for the last prefix
-
-	if (prefix_count > DNS64_RULE_MAX_PREFIXES) {
-		tlog(TLOG_ERROR, "dns64-rule: too many prefixes %d, max is %d", prefix_count, DNS64_RULE_MAX_PREFIXES);
-		goto errout;
-	}
-
 	// Get current rule group
 	struct dns_conf_group *conf_group = _config_current_rule_group();
 	if (conf_group == NULL) {
@@ -263,16 +319,35 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 	}
 	memset(rule, 0, sizeof(struct dns64_rule));
 
+	// Initialize prefix list
+	INIT_LIST_HEAD(&rule->prefix_list);
+
 	// Set IPv4 network info
 	rule->ipv4_network = ipv4_prefix.add.sin.s_addr;
 	rule->ipv4_prefix_len = ipv4_prefix.bitlen;
 	rule->remove_prefix_len = prefix_len;
 	rule->mode = mode;
 
-	// Parse IPv6 prefixes
+	// DEBUG: Log the configured rule
+	uint32_t rule_network_host = ntohl(rule->ipv4_network);
+	tlog(TLOG_INFO, "CONFIG DEBUG: storing rule - IPv4 network=0x%08x (%u.%u.%u.%u), prefix_len=%d", 
+		 rule->ipv4_network, 
+		 (rule_network_host >> 24) & 0xFF, (rule_network_host >> 16) & 0xFF,
+		 (rule_network_host >> 8) & 0xFF, rule_network_host & 0xFF,
+		 rule->ipv4_prefix_len);
+
+	// Parse IPv6 prefixes and create linked list
+	// Create a copy of ipv6_prefixes for strtok (which modifies the string)
+	prefix_str = strdup(ipv6_prefixes);
+	if (prefix_str == NULL) {
+		tlog(TLOG_ERROR, "dns64-rule: out of memory");
+		free(rule);
+		goto errout;
+	}
+	
 	ptr = strtok(prefix_str, ",");
-	i = 0;
-	while (ptr != NULL && i < DNS64_RULE_MAX_PREFIXES) {
+	prefix_count = 0;
+	while (ptr != NULL) {
 		// Remove leading/trailing whitespace
 		while (*ptr == ' ' || *ptr == '\t') ptr++;
 		int len = strlen(ptr);
@@ -283,19 +358,42 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 
 		if (inet_pton(AF_INET6, ptr, &addr_in6.sin6_addr) <= 0) {
 			tlog(TLOG_ERROR, "dns64-rule: invalid ipv6 prefix %s", ptr);
+			// Free allocated prefix nodes
+			struct dns64_rule_prefix *prefix, *tmp;
+			list_for_each_entry_safe(prefix, tmp, &rule->prefix_list, list) {
+				list_del(&prefix->list);
+				free(prefix);
+			}
 			free(rule);
+			free(prefix_str);
 			goto errout;
 		}
 
-		memcpy(rule->ipv6_prefixes[i], addr_in6.sin6_addr.s6_addr, 16);
-		i++;
+		// Create new prefix node
+		struct dns64_rule_prefix *prefix_node = malloc(sizeof(struct dns64_rule_prefix));
+		if (prefix_node == NULL) {
+			tlog(TLOG_ERROR, "dns64-rule: out of memory");
+			// Free allocated prefix nodes
+			struct dns64_rule_prefix *prefix, *tmp;
+			list_for_each_entry_safe(prefix, tmp, &rule->prefix_list, list) {
+				list_del(&prefix->list);
+				free(prefix);
+			}
+			free(rule);
+			free(prefix_str);
+			goto errout;
+		}
+
+		memcpy(prefix_node->ipv6_prefix, addr_in6.sin6_addr.s6_addr, 16);
+		list_add_tail(&prefix_node->list, &rule->prefix_list);
+		prefix_count++;
 		ptr = strtok(NULL, ",");
 	}
-	rule->prefix_count = i;
 
-	if (rule->prefix_count == 0) {
+	if (prefix_count == 0) {
 		tlog(TLOG_ERROR, "dns64-rule: no valid ipv6 prefixes found");
 		free(rule);
+		free(prefix_str);
 		goto errout;
 	}
 
@@ -303,7 +401,7 @@ int _config_dns64_rule(void *data, int argc, char *argv[])
 	list_add_tail(&rule->list, &conf_group->dns64_rule_list);
 
 	tlog(TLOG_INFO, "Added dns64-rule for %s with %d IPv6 prefixes, remove_prefix_len=%d, mode=%s", 
-		 ipv4_subnet, rule->prefix_count, rule->remove_prefix_len, mode_str);
+		 ipv4_subnet, prefix_count, rule->remove_prefix_len, mode_str);
 
 	free(prefix_str);
 	return 0;

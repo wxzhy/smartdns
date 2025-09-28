@@ -34,8 +34,20 @@ int dns64_rule_convert_ipv4_to_ipv6(uint32_t ipv4_addr, const unsigned char *ipv
 
 struct dns64_rule *dns64_rule_find_match(struct dns_conf_group *conf_group, uint32_t ipv4_addr);
 
+struct dns64_converted_address {
+	unsigned char ipv6_addr[16];
+	struct dns64_converted_address *next;
+};
+
+struct dns64_result {
+	int count;
+	struct dns64_converted_address *addresses;
+};
+
 int dns64_rule_apply(struct dns_conf_group *conf_group, uint32_t ipv4_addr, 
-                     unsigned char ipv6_results[][16], int max_results);
+                     struct dns64_result *result);
+
+void dns64_result_free(struct dns64_result *result);
 
 #ifdef __cplusplus
 }

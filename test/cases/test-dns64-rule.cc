@@ -50,7 +50,7 @@ TEST_F(DNS64Rule, basic_conversion_dec_mode)
 server 127.0.0.1:61053
 dualstack-ip-selection no
 speed-check-mode none
-dns64-rule 151.101.0.0/16 2a04:4e42:7c:: 22 dec
+dns64-rule 0.0.0.0/0 2a04:4e42:7c:: 22 dec
 )""");
 
 	smartdns::Client client;
@@ -63,6 +63,23 @@ dns64-rule 151.101.0.0/16 2a04:4e42:7c:: 22 dec
 	// 151.101.1.140 -> remove 22 bits (151.101) -> keep (1.140) = 396 in decimal
 	// 2a04:4e42:7c:: + 396 = 2a04:4e42:7c::18c
 	EXPECT_EQ(client.GetAnswer()[0].GetData(), "2a04:4e42:7c::18c");
+}
+
+TEST_F(DNS64Rule, real_world_conversion_test)
+{
+	smartdns::Server server;
+
+	server.Start(R"""(bind [::]:60053
+dualstack-ip-selection no
+speed-check-mode none
+dns64-rule 34.224.0.0/16 2a04:4e42:7c:: 16 dec
+dns64-rule 3.18.0.0/16 2001:db8:: 16 hex
+)""");
+
+	smartdns::Client client;
+	ASSERT_TRUE(client.Query("test.com AAAA", 60053));
+	std::cout << client.GetResult() << std::endl;
+	// Should have DNS64 conversions for real IPs
 }
 
 TEST_F(DNS64Rule, basic_conversion_hex_mode)

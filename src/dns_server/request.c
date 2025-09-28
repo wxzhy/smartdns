@@ -1034,23 +1034,28 @@ _dns_server_process_dns64_rule_callback(struct dns_request *request, struct dns_
 					 addr_map->ip_addr[0], addr_map->ip_addr[1], addr_map->ip_addr[2], addr_map->ip_addr[3]);
 
 				/* Apply DNS64-rule conversion */
-				unsigned char ipv6_addrs[DNS64_RULE_MAX_PREFIXES][16];
-				int converted_count = dns64_rule_apply(request->conf, ipv4_addr, 
-													   ipv6_addrs, DNS64_RULE_MAX_PREFIXES);
+				struct dns64_result result;
+				printf("$$$ BEFORE dns64_rule_apply call $$$\n");
+				fflush(stdout);
+				int converted_count = dns64_rule_apply(request->conf, ipv4_addr, &result);
+				printf("$$$ AFTER dns64_rule_apply call, converted_count=%d $$$\n", converted_count);
+				fflush(stdout);
 
 				if (converted_count > 0) {
 					/* Add converted IPv6 addresses to request */
-					for (int i = 0; i < converted_count; i++) {
+					struct dns64_converted_address *addr_node = result.addresses;
+					while (addr_node != NULL) {
 						struct dns_ip_address *new_addr_map = malloc(sizeof(struct dns_ip_address));
 						if (new_addr_map == NULL) {
 							tlog(TLOG_ERROR, "malloc failed.\n");
+							dns64_result_free(&result);
 							pthread_mutex_unlock(&child_request->ip_map_lock);
 							return DNS_CHILD_POST_FAIL;
 						}
 
 						memset(new_addr_map, 0, sizeof(struct dns_ip_address));
 						new_addr_map->addr_type = DNS_T_AAAA;
-						memcpy(new_addr_map->ip_addr, ipv6_addrs[i], 16);
+						memcpy(new_addr_map->ip_addr, addr_node->ipv6_addr, 16);
 						new_addr_map->ping_time = addr_map->ping_time;
 
 						key = jhash(new_addr_map->ip_addr, DNS_RR_AAAA_LEN, 0);
@@ -1060,6 +1065,8 @@ _dns_server_process_dns64_rule_callback(struct dns_request *request, struct dns_
 						hash_add(request->ip_map, &new_addr_map->node, key);
 						atomic_inc(&request->ip_map_num);
 						pthread_mutex_unlock(&request->ip_map_lock);
+						
+						addr_node = addr_node->next;
 					}
 
 					converted_any = 1;
@@ -1068,13 +1075,15 @@ _dns_server_process_dns64_rule_callback(struct dns_request *request, struct dns_
 						 converted_count);
 
 					/* Set first converted address as primary */
-					if (request->has_ip == 0) {
-						memcpy(request->ip_addr, ipv6_addrs[0], DNS_RR_AAAA_LEN);
+					if (request->has_ip == 0 && result.addresses != NULL) {
+						memcpy(request->ip_addr, result.addresses->ipv6_addr, DNS_RR_AAAA_LEN);
 						request->ip_addr_type = DNS_T_AAAA;
 						request->ip_ttl = child_request->ip_ttl;
 						request->has_ip = 1;
 						request->has_soa = 0;
 					}
+
+					dns64_result_free(&result);
 				} else {
 					tlog(TLOG_INFO, "DNS64-rule: no conversion rules matched for IPv4 %d.%d.%d.%d", 
 						 addr_map->ip_addr[0], addr_map->ip_addr[1], addr_map->ip_addr[2], addr_map->ip_addr[3]);

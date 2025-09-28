@@ -387,6 +387,20 @@ static void _config_rule_group_remove(struct dns_conf_group *rule_group)
 	art_tree_destroy(&rule_group->domain_rule.tree);
 	Destroy_Radix(rule_group->address_rule.ipv4, _config_ip_iter_free, NULL);
 	Destroy_Radix(rule_group->address_rule.ipv6, _config_ip_iter_free, NULL);
+	
+	// Free DNS64 rules and their prefix lists
+	struct dns64_rule *dns64_rule, *dns64_tmp;
+	list_for_each_entry_safe(dns64_rule, dns64_tmp, &rule_group->dns64_rule_list, list) {
+		// Free all prefix nodes
+		struct dns64_rule_prefix *prefix, *prefix_tmp;
+		list_for_each_entry_safe(prefix, prefix_tmp, &dns64_rule->prefix_list, list) {
+			list_del(&prefix->list);
+			free(prefix);
+		}
+		list_del(&dns64_rule->list);
+		free(dns64_rule);
+	}
+	
 	free(rule_group->soa_table);
 	dns_conf_rule.group_num--;
 

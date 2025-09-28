@@ -463,11 +463,14 @@ struct dns_dns64 {
 	uint32_t prefix_len;
 };
 
-#define DNS64_RULE_MAX_PREFIXES 8
-
 enum dns64_rule_mode {
 	DNS64_RULE_MODE_DEC = 0,
 	DNS64_RULE_MODE_HEX = 1,
+};
+
+struct dns64_rule_prefix {
+	struct list_head list;
+	unsigned char ipv6_prefix[16];
 };
 
 struct dns64_rule {
@@ -476,8 +479,7 @@ struct dns64_rule {
 	int ipv4_prefix_len;
 	int remove_prefix_len;
 	enum dns64_rule_mode mode;
-	int prefix_count;
-	unsigned char ipv6_prefixes[DNS64_RULE_MAX_PREFIXES][16];
+	struct list_head prefix_list;
 };
 
 struct dns_conf_group {
