@@ -368,6 +368,7 @@ struct dns_conf_group *_config_rule_group_new(const char *group_name)
 
 	INIT_HLIST_NODE(&rule_group->node);
 	art_tree_init(&rule_group->domain_rule.tree);
+	INIT_LIST_HEAD(&rule_group->dns64_rule_list);
 
 	rule_group->address_rule.ipv4 = New_Radix();
 	rule_group->address_rule.ipv6 = New_Radix();

@@ -143,6 +143,7 @@ typedef enum {
 #define DOMAIN_FLAG_ENABLE_CACHE (1 << 20)
 #define DOMAIN_FLAG_ADDR_HTTPS_SOA (1 << 21)
 #define DOMAIN_FLAG_ADDR_HTTPS_IGN (1 << 22)
+#define DOMAIN_FLAG_NO_DNS64_RULE (1 << 23)
 
 #define IP_RULE_FLAG_BLACKLIST (1 << 0)
 #define IP_RULE_FLAG_WHITELIST (1 << 1)
@@ -462,11 +463,29 @@ struct dns_dns64 {
 	uint32_t prefix_len;
 };
 
+#define DNS64_RULE_MAX_PREFIXES 8
+
+enum dns64_rule_mode {
+	DNS64_RULE_MODE_DEC = 0,
+	DNS64_RULE_MODE_HEX = 1,
+};
+
+struct dns64_rule {
+	struct list_head list;
+	uint32_t ipv4_network;
+	int ipv4_prefix_len;
+	int remove_prefix_len;
+	enum dns64_rule_mode mode;
+	int prefix_count;
+	unsigned char ipv6_prefixes[DNS64_RULE_MAX_PREFIXES][16];
+};
+
 struct dns_conf_group {
 	struct hlist_node node;
 	struct dns_conf_domain_rule domain_rule;
 	struct dns_conf_address_rule address_rule;
 	uint8_t *soa_table;
+	struct list_head dns64_rule_list;
 	/* === AUTO COPY FIELD BEGIN === */
 	char copy_data_section_begin[0];
 	struct dns_conf_ipset_nftset ipset_nftset;

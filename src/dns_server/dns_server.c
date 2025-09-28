@@ -348,6 +348,13 @@ int _dns_server_do_query(struct dns_request *request, int skip_notify_event)
 		goto errout;
 	}
 
+	/* Process DNS64-rule if DNS64 is not active */
+	if (_dns_server_is_dns64_request(request) == 0 && request->qtype == DNS_T_AAAA) {
+		if (_dns_server_process_dns64_rule(request) != 0) {
+			goto errout;
+		}
+	}
+
 	// Get reference for DNS query
 	request->request_wait++;
 	_dns_server_request_get(request);

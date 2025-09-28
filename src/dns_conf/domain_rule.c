@@ -691,6 +691,7 @@ int _config_domain_rules(void *data, int argc, char *argv[])
 		{"no-cache", no_argument, NULL, 256},
 		{"no-ip-alias", no_argument, NULL, 257},
 		{"enable-cache", no_argument, NULL, 258},
+		{"no-dns64-rule", no_argument, NULL, 259},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -897,6 +898,14 @@ int _config_domain_rules(void *data, int argc, char *argv[])
 		case 258: {
 			if (_conf_domain_rule_enable_cache(domain) != 0) {
 				tlog(TLOG_ERROR, "set enable-cache rule failed.");
+				goto errout;
+			}
+
+			break;
+		}
+		case 259: {
+			if (_config_domain_rule_flag_set(domain, DOMAIN_FLAG_NO_DNS64_RULE, 0) != 0) {
+				tlog(TLOG_ERROR, "set no-dns64-rule rule failed.");
 				goto errout;
 			}
 

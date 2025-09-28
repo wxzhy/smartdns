@@ -28,6 +28,7 @@
 #include "request_pending.h"
 #include "rules.h"
 #include "soa.h"
+#include "../dns_conf/dns64_rule.h"
 
 #include "smartdns/dns_plugin.h"
 #include "smartdns/dns_stats.h"
@@ -52,6 +53,36 @@ int _dns_server_is_dns64_request(struct dns_request *request)
 	}
 
 	if (request->conf->dns_dns64.prefix_len <= 0) {
+		return 0;
+	}
+
+	return 1;
+}
+
+int _dns_server_is_dns64_rule_request(struct dns_request *request)
+{
+	if (request->qtype != DNS_T_AAAA) {
+		return 0;
+	}
+
+	if (request->dualstack_selection_query == 1) {
+		return 0;
+	}
+
+	/* Check if there are any DNS64-rule configurations */
+	if (list_empty(&request->conf->dns64_rule_list)) {
+		return 0;
+	}
+
+	/* Check domain flags - skip if -no-dns64-rule flag is set */
+	struct dns_rule_flags *rule_flag = _dns_server_get_dns_rule(request, DOMAIN_RULE_FLAGS);
+	unsigned int flags = 0;
+	
+	if (rule_flag != NULL) {
+		flags = rule_flag->flags;
+	}
+	
+	if (flags & DOMAIN_FLAG_NO_DNS64_RULE) {
 		return 0;
 	}
 
@@ -921,6 +952,145 @@ _dns_server_process_dns64_callback(struct dns_request *request, struct dns_reque
 	return DNS_CHILD_POST_SKIP;
 }
 
+static DNS_CHILD_POST_RESULT
+_dns_server_process_dns64_rule_callback(struct dns_request *request, struct dns_request *child_request, int is_first_resp)
+{
+	unsigned long bucket = 0;
+	struct dns_ip_address *addr_map = NULL;
+	struct hlist_node *tmp = NULL;
+	uint32_t key = 0;
+
+	tlog(TLOG_INFO, "DNS64-rule callback: processing A query result for %s", request->domain);
+
+	if (child_request->qtype != DNS_T_A) {
+		return DNS_CHILD_POST_FAIL;
+	}
+
+	if (child_request->has_cname == 1) {
+		safe_strncpy(request->cname, child_request->cname, sizeof(request->cname));
+		request->has_cname = 1;
+		request->ttl_cname = child_request->ttl_cname;
+	}
+
+	if (child_request->has_ip == 0 && request->has_ip == 0) {
+		request->rcode = child_request->rcode;
+		if (child_request->has_soa) {
+			memcpy(&request->soa, &child_request->soa, sizeof(struct dns_soa));
+			request->has_soa = 1;
+			return DNS_CHILD_POST_SKIP;
+		}
+
+		if (request->has_soa == 0) {
+			_dns_server_setup_soa(request);
+			request->has_soa = 1;
+		}
+		return DNS_CHILD_POST_FAIL;
+	}
+
+	/* Process DNS64-rule conversion if child request has A records */
+	if (child_request->has_ip == 1) {
+		request->rcode = child_request->rcode;
+		int converted_any = 0;
+		
+		/* Check if parent request already has AAAA results - if so, don't convert */
+		if (request->has_ip && request->ip_addr_type == DNS_T_AAAA) {
+			tlog(TLOG_INFO, "DNS64-rule: parent request already has AAAA results, skipping conversion");
+			return DNS_CHILD_POST_SUCCESS;
+		}
+		
+		/* Check if parent request has any AAAA records in ip_map */
+		int has_aaaa_records = 0;
+		pthread_mutex_lock(&request->ip_map_lock);
+		hash_for_each_safe(request->ip_map, bucket, tmp, addr_map, node) {
+			if (addr_map->addr_type == DNS_T_AAAA) {
+				has_aaaa_records = 1;
+				break;
+			}
+		}
+		pthread_mutex_unlock(&request->ip_map_lock);
+		
+		if (has_aaaa_records) {
+			tlog(TLOG_INFO, "DNS64-rule: parent request already has AAAA records in ip_map, skipping conversion");
+			return DNS_CHILD_POST_SUCCESS;
+		}
+
+		/* Clear existing IP map */
+		pthread_mutex_lock(&request->ip_map_lock);
+		hash_for_each_safe(request->ip_map, bucket, tmp, addr_map, node) {
+			hash_del(&addr_map->node);
+			free(addr_map);
+		}
+		pthread_mutex_unlock(&request->ip_map_lock);
+
+		/* Process A records and convert using DNS64-rule */
+		pthread_mutex_lock(&child_request->ip_map_lock);
+		hash_for_each_safe(child_request->ip_map, bucket, tmp, addr_map, node) {
+			if (addr_map->addr_type == DNS_T_A) {
+				/* IPv4 address is already in network byte order */
+				uint32_t ipv4_addr;
+				memcpy(&ipv4_addr, addr_map->ip_addr, sizeof(uint32_t));
+
+				tlog(TLOG_INFO, "DNS64-rule: processing A record %d.%d.%d.%d", 
+					 addr_map->ip_addr[0], addr_map->ip_addr[1], addr_map->ip_addr[2], addr_map->ip_addr[3]);
+
+				/* Apply DNS64-rule conversion */
+				unsigned char ipv6_addrs[DNS64_RULE_MAX_PREFIXES][16];
+				int converted_count = dns64_rule_apply(request->conf, ipv4_addr, 
+													   ipv6_addrs, DNS64_RULE_MAX_PREFIXES);
+
+				if (converted_count > 0) {
+					/* Add converted IPv6 addresses to request */
+					for (int i = 0; i < converted_count; i++) {
+						struct dns_ip_address *new_addr_map = malloc(sizeof(struct dns_ip_address));
+						if (new_addr_map == NULL) {
+							tlog(TLOG_ERROR, "malloc failed.\n");
+							pthread_mutex_unlock(&child_request->ip_map_lock);
+							return DNS_CHILD_POST_FAIL;
+						}
+
+						memset(new_addr_map, 0, sizeof(struct dns_ip_address));
+						new_addr_map->addr_type = DNS_T_AAAA;
+						memcpy(new_addr_map->ip_addr, ipv6_addrs[i], 16);
+						new_addr_map->ping_time = addr_map->ping_time;
+
+						key = jhash(new_addr_map->ip_addr, DNS_RR_AAAA_LEN, 0);
+						key = jhash(&new_addr_map->addr_type, sizeof(new_addr_map->addr_type), key);
+						
+						pthread_mutex_lock(&request->ip_map_lock);
+						hash_add(request->ip_map, &new_addr_map->node, key);
+						atomic_inc(&request->ip_map_num);
+						pthread_mutex_unlock(&request->ip_map_lock);
+					}
+
+					converted_any = 1;
+					tlog(TLOG_INFO, "DNS64-rule: converted A record %d.%d.%d.%d to %d AAAA records", 
+						 addr_map->ip_addr[0], addr_map->ip_addr[1], addr_map->ip_addr[2], addr_map->ip_addr[3], 
+						 converted_count);
+
+					/* Set first converted address as primary */
+					if (request->has_ip == 0) {
+						memcpy(request->ip_addr, ipv6_addrs[0], DNS_RR_AAAA_LEN);
+						request->ip_addr_type = DNS_T_AAAA;
+						request->ip_ttl = child_request->ip_ttl;
+						request->has_ip = 1;
+						request->has_soa = 0;
+					}
+				} else {
+					tlog(TLOG_INFO, "DNS64-rule: no conversion rules matched for IPv4 %d.%d.%d.%d", 
+						 addr_map->ip_addr[0], addr_map->ip_addr[1], addr_map->ip_addr[2], addr_map->ip_addr[3]);
+				}
+			}
+		}
+		pthread_mutex_unlock(&child_request->ip_map_lock);
+
+		if (converted_any) {
+			tlog(TLOG_INFO, "DNS64-rule: successfully converted A records to AAAA for %s", request->domain);
+		}
+	}
+
+	return DNS_CHILD_POST_SKIP;
+}
+
 int _dns_server_process_dns64(struct dns_request *request)
 {
 	if (_dns_server_is_dns64_request(request) == 0) {
@@ -931,6 +1101,44 @@ int _dns_server_process_dns64(struct dns_request *request)
 
 	struct dns_request *child_request =
 		_dns_server_new_child_request(request, request->domain, DNS_T_A, _dns_server_process_dns64_callback);
+	if (child_request == NULL) {
+		tlog(TLOG_ERROR, "malloc failed.\n");
+		return -1;
+	}
+
+	request->dualstack_selection = 0;
+	child_request->prefetch_flags |= PREFETCH_FLAGS_NO_DUALSTACK;
+	request->request_wait++;
+	int ret = _dns_server_do_query(child_request, 0);
+	if (ret != 0) {
+		request->request_wait--;
+		tlog(TLOG_ERROR, "do query %s type %d failed.\n", request->domain, request->qtype);
+		goto errout;
+	}
+
+	_dns_server_request_release_complete(child_request, 0);
+	return 0;
+
+errout:
+
+	if (child_request) {
+		request->child_request = NULL;
+		_dns_server_request_release(child_request);
+	}
+
+	return -1;
+}
+
+int _dns_server_process_dns64_rule(struct dns_request *request)
+{
+	if (_dns_server_is_dns64_rule_request(request) == 0) {
+		return 0;
+	}
+
+	tlog(TLOG_INFO, "DNS64-rule: processing AAAA query for %s", request->domain);
+
+	struct dns_request *child_request =
+		_dns_server_new_child_request(request, request->domain, DNS_T_A, _dns_server_process_dns64_rule_callback);
 	if (child_request == NULL) {
 		tlog(TLOG_ERROR, "malloc failed.\n");
 		return -1;

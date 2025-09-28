@@ -33,6 +33,10 @@ void _dns_server_query_end(struct dns_request *request);
 
 int _dns_server_process_DDR(struct dns_request *request);
 
+int _dns_server_process_dns64_rule(struct dns_request *request);
+
+int _dns_server_is_dns64_rule_request(struct dns_request *request);
+
 void *dns_server_request_get_private(struct dns_request *request);
 
 struct dns_request *_dns_server_new_request(void);
