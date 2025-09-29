@@ -10,3 +10,11 @@ test.bin
 package/target
 package/*.gz
 package/*.ipk
+*.conf
+*.txt
+*.out
+*.log
+*.elf
+*.pid
+*.gz
+*.bin
