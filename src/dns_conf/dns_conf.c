@@ -37,6 +37,7 @@
 #include "host_file.h"
 #include "https_record.h"
 #include "ip_alias.h"
+#include "prefix_alias.h"
 #include "ip_rule.h"
 #include "ip_set.h"
 #include "ipset.h"
@@ -209,6 +210,7 @@ static struct config_item _config_item[] = {
 	CONF_CUSTOM("blacklist-ip", _config_blacklist_ip, NULL),
 	CONF_CUSTOM("whitelist-ip", _config_whitelist_ip, NULL),
 	CONF_CUSTOM("ip-alias", _config_ip_alias, NULL),
+	CONF_CUSTOM("prefix-alias", _config_prefix_alias, NULL),
 	CONF_CUSTOM("ip-rules", _config_ip_rules, NULL),
 	CONF_CUSTOM("ip-set", _config_ip_set, NULL),
 	CONF_CUSTOM("bogus-nxdomain", _config_bogus_nxdomain, NULL),

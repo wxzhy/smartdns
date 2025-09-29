@@ -34,24 +34,33 @@ static int _dns_server_process_answer_A_IP(struct dns_request *request, char *cn
 	int ip_check_result = 0;
 	unsigned char *paddrs[MAX_IP_NUM];
 	int paddr_num = 0;
-	struct dns_iplist_ip_addresses *alias = NULL;
+	struct dns_ip_rule_result rule_result = {0};
 
 	paddrs[paddr_num] = addr;
 	paddr_num = 1;
 
 	/* ip rule check */
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 4, DNS_T_A, result_flag, &alias);
-	if (ip_check_result == 0) {
-		/* match */
-		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
+	ip_check_result = _dns_server_process_ip_rule(request, addr, 4, DNS_T_A, result_flag, &rule_result);
+	if (ip_check_result == -2 || ip_check_result == -3) {
 		/* skip, nxdomain */
 		return ip_check_result;
-	}
-
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
-	if (ret != 0) {
-		return ret;
+	} else if (ip_check_result == 0) {
+		/* no special processing needed, continue with original IP */
+		// paddrs[0] is already set to addr above
+		paddr_num = 1;
+	} else if (ip_check_result == -1) {
+		/* need to process alias rules */
+		int ret = 0;
+		// Process prefix-alias first, then regular alias
+		if (rule_result.prefix_alias != NULL) {
+			ret = _dns_server_process_prefix_alias(request, addr, DNS_RR_A_LEN, 
+												   rule_result.prefix_alias, paddrs, &paddr_num, MAX_IP_NUM);
+		} else if (rule_result.alias != NULL) {
+			ret = _dns_server_process_ip_alias(request, rule_result.alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_A_LEN);
+		}
+		if (ret != 0) {
+			return ret;
+		}
 	}
 
 	for (int i = 0; i < paddr_num; i++) {
@@ -104,24 +113,33 @@ static int _dns_server_process_answer_AAAA_IP(struct dns_request *request, char 
 	char ip[DNS_MAX_CNAME_LEN] = {0};
 	int ip_check_result = 0;
 	unsigned char *paddrs[MAX_IP_NUM];
-	struct dns_iplist_ip_addresses *alias = NULL;
+	struct dns_ip_rule_result rule_result = {0};
 	int paddr_num = 0;
 
 	paddrs[paddr_num] = addr;
 	paddr_num = 1;
 
-	ip_check_result = _dns_server_process_ip_rule(request, addr, 16, DNS_T_AAAA, result_flag, &alias);
-	if (ip_check_result == 0) {
-		/* match */
-		return -1;
-	} else if (ip_check_result == -2 || ip_check_result == -3) {
+	ip_check_result = _dns_server_process_ip_rule(request, addr, 16, DNS_T_AAAA, result_flag, &rule_result);
+	if (ip_check_result == -2 || ip_check_result == -3) {
 		/* skip, nxdomain */
 		return ip_check_result;
-	}
-
-	int ret = _dns_server_process_ip_alias(request, alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
-	if (ret != 0) {
-		return ret;
+	} else if (ip_check_result == 0) {
+		/* no special processing needed, continue with original IP */
+		// paddrs[0] is already set to addr above
+		paddr_num = 1;
+	} else if (ip_check_result == -1) {
+		/* need to process alias rules */
+		int ret = 0;
+		// Process prefix-alias first, then regular alias
+		if (rule_result.prefix_alias != NULL) {
+			ret = _dns_server_process_prefix_alias(request, addr, DNS_RR_AAAA_LEN, 
+												   rule_result.prefix_alias, paddrs, &paddr_num, MAX_IP_NUM);
+		} else if (rule_result.alias != NULL) {
+			ret = _dns_server_process_ip_alias(request, rule_result.alias, paddrs, &paddr_num, MAX_IP_NUM, DNS_RR_AAAA_LEN);
+		}
+		if (ret != 0) {
+			return ret;
+		}
 	}
 
 	for (int i = 0; i < paddr_num; i++) {

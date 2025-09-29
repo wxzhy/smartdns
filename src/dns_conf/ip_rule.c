@@ -19,6 +19,7 @@
 #include "ip_rule.h"
 #include "dns_conf_group.h"
 #include "ip_alias.h"
+#include "prefix_alias.h"
 #include "set_file.h"
 #include "smartdns/util.h"
 
@@ -86,6 +87,7 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 		{"bogus-nxdomain", no_argument, NULL, 'n'},
 		{"ignore-ip", no_argument, NULL, 'i'},
 		{"ip-alias", required_argument, NULL, 'a'},
+		{"prefix-alias", required_argument, NULL, 'p'},
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -131,6 +133,31 @@ int _config_ip_rules(void *data, int argc, char *argv[])
 		}
 		case 'a': {
 			if (_conf_ip_alias(ip_cidr, optarg) != 0) {
+				goto errout;
+			}
+			break;
+		}
+		case 'p': {
+			// prefix-alias format: ip1,ip2,... prefix_length
+			char *prefix_ips = optarg;
+			char *next_arg = NULL;
+			int prefix_len = 0;
+			
+			// Look for the next argument which should be the prefix length
+			if (optind < argc) {
+				next_arg = argv[optind];
+				prefix_len = atoi(next_arg);
+				optind++; // consume the prefix length argument
+				if (prefix_len <= 0) {
+					tlog(TLOG_ERROR, "invalid prefix length: %s", next_arg);
+					goto errout;
+				}
+			} else {
+				tlog(TLOG_ERROR, "prefix-alias requires prefix length");
+				goto errout;
+			}
+			
+			if (_conf_prefix_alias(ip_cidr, prefix_ips, prefix_len) != 0) {
 				goto errout;
 			}
 			break;
@@ -342,6 +369,9 @@ static void *_new_dns_ip_rule_ext(enum ip_rule ip_rule, int ext_size)
 	case IP_RULE_ALIAS:
 		size = sizeof(struct ip_rule_alias);
 		break;
+	case IP_RULE_PREFIX_ALIAS:
+		size = sizeof(struct ip_rule_prefix_alias);
+		break;
 	default:
 		return NULL;
 	}
@@ -377,6 +407,13 @@ void _dns_ip_rule_put(struct dns_ip_rule *rule)
 				alias->ip_alias.ipaddr = NULL;
 				alias->ip_alias.ipaddr_num = 0;
 			}
+		} else if (rule->rule == IP_RULE_PREFIX_ALIAS) {
+			struct ip_rule_prefix_alias *prefix_alias = container_of(rule, struct ip_rule_prefix_alias, head);
+			if (prefix_alias->ip_alias.ipaddr) {
+				free(prefix_alias->ip_alias.ipaddr);
+				prefix_alias->ip_alias.ipaddr = NULL;
+				prefix_alias->ip_alias.ipaddr_num = 0;
+			}
 		}
 		free(rule);
 	}
@@ -411,6 +448,48 @@ int _config_ip_rule_alias_add_ip(const char *ip, struct ip_rule_alias *ip_alias)
 		} else {
 			paddr = addr_in6->sin6_addr.s6_addr;
 			_dns_iplist_ip_address_add(&ip_alias->ip_alias, paddr, DNS_RR_AAAA_LEN);
+		}
+	} break;
+	default:
+		goto errout;
+		break;
+	}
+
+	return 0;
+
+errout:
+	return -1;
+}
+
+int _config_ip_rule_prefix_alias_add_ip(const char *ip, struct ip_rule_prefix_alias *prefix_alias)
+{
+	struct sockaddr_storage addr;
+	socklen_t addr_len = sizeof(addr);
+	unsigned char *paddr = NULL;
+	int ret = 0;
+
+	ret = getaddr_by_host(ip, (struct sockaddr *)&addr, &addr_len);
+	if (ret != 0) {
+		tlog(TLOG_ERROR, "ip is invalid: %s", ip);
+		goto errout;
+	}
+
+	switch (addr.ss_family) {
+	case AF_INET: {
+		struct sockaddr_in *addr_in = NULL;
+		addr_in = (struct sockaddr_in *)&addr;
+		paddr = (unsigned char *)&(addr_in->sin_addr.s_addr);
+		_dns_iplist_ip_address_add(&prefix_alias->ip_alias, paddr, DNS_RR_A_LEN);
+	} break;
+	case AF_INET6: {
+		struct sockaddr_in6 *addr_in6 = NULL;
+		addr_in6 = (struct sockaddr_in6 *)&addr;
+		if (IN6_IS_ADDR_V4MAPPED(&addr_in6->sin6_addr)) {
+			paddr = addr_in6->sin6_addr.s6_addr + 12;
+			_dns_iplist_ip_address_add(&prefix_alias->ip_alias, paddr, DNS_RR_A_LEN);
+		} else {
+			paddr = addr_in6->sin6_addr.s6_addr;
+			_dns_iplist_ip_address_add(&prefix_alias->ip_alias, paddr, DNS_RR_AAAA_LEN);
 		}
 	} break;
 	default:
