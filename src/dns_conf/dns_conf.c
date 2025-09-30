@@ -178,6 +178,7 @@ static struct config_item _config_item[] = {
 	CONF_INT_FUNC("dualstack-ip-selection-threshold", _dns_conf_group_int,
 				  group_member(dns_dualstack_ip_selection_threshold), 0, 1000),
 	CONF_CUSTOM("dns64", _config_dns64, NULL),
+	CONF_CUSTOM("dns64-rule", _config_dns64_rule, NULL),
 	CONF_CUSTOM("log-level", _config_log_level, NULL),
 	CONF_CUSTOM("log-file", _config_option_parser_filepath, (char *)dns_conf.log_file),
 	CONF_SIZE("log-size", &dns_conf.log_size, 0, 1024 * 1024 * 1024),

@@ -143,6 +143,7 @@ typedef enum {
 #define DOMAIN_FLAG_ENABLE_CACHE (1 << 20)
 #define DOMAIN_FLAG_ADDR_HTTPS_SOA (1 << 21)
 #define DOMAIN_FLAG_ADDR_HTTPS_IGN (1 << 22)
+#define DOMAIN_FLAG_NO_DNS64_RULE (1 << 23)
 
 #define IP_RULE_FLAG_BLACKLIST (1 << 0)
 #define IP_RULE_FLAG_WHITELIST (1 << 1)
@@ -462,6 +463,24 @@ struct dns_dns64 {
 	uint32_t prefix_len;
 };
 
+enum dns64_rule_mode {
+	DNS64_RULE_MODE_DEC = 0,
+	DNS64_RULE_MODE_HEX = 1,
+};
+
+#define DNS64_RULE_MAX_PREFIXES 16
+
+struct dns_dns64_rule_item {
+	unsigned char prefixes[DNS64_RULE_MAX_PREFIXES][DNS_RR_AAAA_LEN];
+	int prefix_count;
+	int prefix_len;
+	enum dns64_rule_mode mode;
+};
+
+struct dns_dns64_rule {
+	radix_tree_t *ipv4_rules;
+};
+
 struct dns_conf_group {
 	struct hlist_node node;
 	struct dns_conf_domain_rule domain_rule;
@@ -477,6 +496,7 @@ struct dns_conf_group {
 
 	/* DNS64 */
 	struct dns_dns64 dns_dns64;
+	struct dns_dns64_rule dns_dns64_rule;
 
 	int force_AAAA_SOA;
 	int dualstack_ip_selection;

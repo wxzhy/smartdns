@@ -28,6 +28,7 @@
 #include "request_pending.h"
 #include "rules.h"
 #include "soa.h"
+#include "speed_check.h"
 
 #include "smartdns/dns_plugin.h"
 #include "smartdns/dns_stats.h"
@@ -51,7 +52,7 @@ int _dns_server_is_dns64_request(struct dns_request *request)
 		return 0;
 	}
 
-	if (request->conf->dns_dns64.prefix_len <= 0) {
+	if (request->conf->dns_dns64.prefix_len <= 0 && request->conf->dns_dns64_rule.ipv4_rules == NULL) {
 		return 0;
 	}
 
@@ -824,6 +825,142 @@ const char *_dns_server_get_request_server_groupname(struct dns_request *request
 	return NULL;
 }
 
+static struct dns_dns64_rule_item *_dns_server_get_dns64_rule(struct dns_request *request, unsigned char *ipv4_addr)
+{
+	prefix_t prefix;
+	radix_node_t *node = NULL;
+
+	if (request->conf == NULL || request->conf->dns_dns64_rule.ipv4_rules == NULL) {
+		return NULL;
+	}
+
+	if (request->no_dns64_rule) {
+		tlog(TLOG_DEBUG, "dns64-rule: skipping due to no_dns64_rule flag for domain %s", request->domain);
+		return NULL;
+	}
+
+	/* Match IPv4 address rules */
+	if (prefix_from_blob(ipv4_addr, DNS_RR_A_LEN, 32, &prefix) == NULL) {
+		return NULL;
+	}
+
+	node = radix_search_best(request->conf->dns_dns64_rule.ipv4_rules, &prefix);
+	if (node == NULL || node->data == NULL) {
+		return NULL;
+	}
+
+	return (struct dns_dns64_rule_item *)node->data;
+}
+
+static int _dns_server_generate_dns64_rule_ipv6(struct dns_request *request, unsigned char *ipv4_addr,
+												struct dns_dns64_rule_item *rule,
+												unsigned char ipv6_addrs[][DNS_RR_AAAA_LEN],
+												int *ipv6_count)
+{
+	int count = 0;
+	int prefix_bytes = rule->prefix_len / 8;
+	int prefix_bits = rule->prefix_len % 8;
+	uint32_t remaining = 0;
+	int remaining_bytes = 0;
+
+	if (rule == NULL || ipv4_addr == NULL || ipv6_addrs == NULL || ipv6_count == NULL) {
+		return -1;
+	}
+
+	/* Calculate remaining part after removing prefix */
+	if (prefix_bytes < 4) {
+		/* Copy bytes from IPv4 after prefix */
+		for (int i = prefix_bytes; i < 4; i++) {
+			remaining = (remaining << 8) | ipv4_addr[i];
+		}
+
+		/* Handle partial byte */
+		if (prefix_bits > 0) {
+			unsigned char mask = (1 << (8 - prefix_bits)) - 1;
+			remaining = (ipv4_addr[prefix_bytes] & mask);
+			for (int i = prefix_bytes + 1; i < 4; i++) {
+				remaining = (remaining << 8) | ipv4_addr[i];
+			}
+		}
+	}
+
+	remaining_bytes = 4 - prefix_bytes - (prefix_bits > 0 ? 1 : 0);
+
+	tlog(TLOG_DEBUG, "dns64-rule: IPv4 %d.%d.%d.%d, prefix_len=%d, remaining=0x%x, mode=%s",
+		 ipv4_addr[0], ipv4_addr[1], ipv4_addr[2], ipv4_addr[3],
+		 rule->prefix_len, remaining, rule->mode == DNS64_RULE_MODE_DEC ? "dec" : "hex");
+
+	/* Generate IPv6 for each prefix */
+	for (int i = 0; i < rule->prefix_count && count < DNS64_RULE_MAX_PREFIXES; i++) {
+		if (rule->mode == DNS64_RULE_MODE_DEC) {
+			/* Decimal mode: convert prefix to string, append decimal suffix, convert back */
+			char ipv6_str[INET6_ADDRSTRLEN];
+			char final_ipv6_str[INET6_ADDRSTRLEN + 16];
+			
+			/* Convert prefix to string */
+			if (inet_ntop(AF_INET6, rule->prefixes[i], ipv6_str, sizeof(ipv6_str)) == NULL) {
+				tlog(TLOG_ERROR, "dns64-rule: failed to convert IPv6 prefix to string");
+				continue;
+			}
+			
+			/* Append decimal suffix: remove trailing :: if present, then add :suffix */
+			int len = strlen(ipv6_str);
+			if (len >= 2 && ipv6_str[len-1] == ':' && ipv6_str[len-2] == ':') {
+				/* Prefix ends with ::, append decimal directly */
+				snprintf(final_ipv6_str, sizeof(final_ipv6_str), "%s%u", ipv6_str, remaining);
+			} else if (len >= 1 && ipv6_str[len-1] == ':') {
+				/* Prefix ends with single :, append decimal directly */
+				snprintf(final_ipv6_str, sizeof(final_ipv6_str), "%s%u", ipv6_str, remaining);
+			} else {
+				/* Prefix doesn't end with :, add : before decimal */
+				snprintf(final_ipv6_str, sizeof(final_ipv6_str), "%s:%u", ipv6_str, remaining);
+			}
+			
+			/* Convert final string back to binary IPv6 */
+			if (inet_pton(AF_INET6, final_ipv6_str, ipv6_addrs[count]) != 1) {
+				tlog(TLOG_ERROR, "dns64-rule: failed to parse generated IPv6: %s", final_ipv6_str);
+				continue;
+			}
+
+			tlog(TLOG_DEBUG, "dns64-rule: generated IPv6 (dec mode): %s", final_ipv6_str);
+		} else {
+			/* Hex mode: directly append hex value to binary prefix */
+			memcpy(ipv6_addrs[count], rule->prefixes[i], DNS_RR_AAAA_LEN);
+			
+			int byte_pos = 12; /* Start after first 96 bits */
+			
+			/* Copy remaining bytes in big-endian order */
+			if (remaining_bytes == 1) {
+				ipv6_addrs[count][byte_pos + 2] = 0;
+				ipv6_addrs[count][byte_pos + 3] = remaining & 0xFF;
+			} else if (remaining_bytes == 2) {
+				ipv6_addrs[count][byte_pos + 2] = (remaining >> 8) & 0xFF;
+				ipv6_addrs[count][byte_pos + 3] = remaining & 0xFF;
+			} else if (remaining_bytes == 3) {
+				ipv6_addrs[count][byte_pos + 1] = (remaining >> 16) & 0xFF;
+				ipv6_addrs[count][byte_pos + 2] = (remaining >> 8) & 0xFF;
+				ipv6_addrs[count][byte_pos + 3] = remaining & 0xFF;
+			} else if (remaining_bytes == 4) {
+				ipv6_addrs[count][byte_pos + 0] = (remaining >> 24) & 0xFF;
+				ipv6_addrs[count][byte_pos + 1] = (remaining >> 16) & 0xFF;
+				ipv6_addrs[count][byte_pos + 2] = (remaining >> 8) & 0xFF;
+				ipv6_addrs[count][byte_pos + 3] = remaining & 0xFF;
+			}
+
+			tlog(TLOG_DEBUG, "dns64-rule: generated IPv6 (hex mode): %02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+				 ipv6_addrs[count][0], ipv6_addrs[count][1], ipv6_addrs[count][2], ipv6_addrs[count][3],
+				 ipv6_addrs[count][4], ipv6_addrs[count][5], ipv6_addrs[count][6], ipv6_addrs[count][7],
+				 ipv6_addrs[count][8], ipv6_addrs[count][9], ipv6_addrs[count][10], ipv6_addrs[count][11],
+				 ipv6_addrs[count][12], ipv6_addrs[count][13], ipv6_addrs[count][14], ipv6_addrs[count][15]);
+		}
+
+		count++;
+	}
+
+	*ipv6_count = count;
+	return 0;
+}
+
 static enum DNS_CHILD_POST_RESULT
 _dns_server_process_dns64_callback(struct dns_request *request, struct dns_request *child_request, int is_first_resp)
 {
@@ -866,11 +1003,37 @@ _dns_server_process_dns64_callback(struct dns_request *request, struct dns_reque
 
 	if (request->has_ip == 0 && child_request->has_ip == 1) {
 		request->rcode = child_request->rcode;
-		memcpy(request->ip_addr, request->conf->dns_dns64.prefix, 12);
-		memcpy(request->ip_addr + 12, child_request->ip_addr, 4);
-		request->ip_ttl = child_request->ip_ttl;
-		request->has_ip = 1;
-		request->has_soa = 0;
+
+		/* Try dns64-rule first for primary IP */
+		struct dns_dns64_rule_item *rule_item = _dns_server_get_dns64_rule(request, child_request->ip_addr);
+		if (rule_item != NULL) {
+			unsigned char generated_ipv6[DNS64_RULE_MAX_PREFIXES][DNS_RR_AAAA_LEN];
+			int ipv6_count = 0;
+
+			if (_dns_server_generate_dns64_rule_ipv6(request, child_request->ip_addr, rule_item, generated_ipv6,
+			                                         &ipv6_count) == 0 &&
+			    ipv6_count > 0) {
+				/* Use first generated IPv6 as primary IP */
+				memcpy(request->ip_addr, generated_ipv6[0], DNS_RR_AAAA_LEN);
+				request->ip_ttl = child_request->ip_ttl;
+				request->has_ip = 1;
+				request->has_soa = 0;
+			} else if (request->conf->dns_dns64.prefix_len > 0) {
+				/* Fall back to standard DNS64 if prefix is configured */
+				memcpy(request->ip_addr, request->conf->dns_dns64.prefix, 12);
+				memcpy(request->ip_addr + 12, child_request->ip_addr, 4);
+				request->ip_ttl = child_request->ip_ttl;
+				request->has_ip = 1;
+				request->has_soa = 0;
+			}
+		} else if (request->conf->dns_dns64.prefix_len > 0) {
+			/* Standard DNS64 - only if prefix is configured */
+			memcpy(request->ip_addr, request->conf->dns_dns64.prefix, 12);
+			memcpy(request->ip_addr + 12, child_request->ip_addr, 4);
+			request->ip_ttl = child_request->ip_ttl;
+			request->has_ip = 1;
+			request->has_soa = 0;
+		}
 	}
 
 	pthread_mutex_lock(&request->ip_map_lock);
@@ -881,6 +1044,8 @@ _dns_server_process_dns64_callback(struct dns_request *request, struct dns_reque
 	}
 	pthread_mutex_unlock(&request->ip_map_lock);
 
+	/* Generate IPv6 addresses from IPv4 using dns64-rule and add them to request->ip_map for speed check */
+	int has_generated_ipv6 = 0;
 	pthread_mutex_lock(&child_request->ip_map_lock);
 	hash_for_each_safe(child_request->ip_map, bucket, tmp, addr_map, node)
 	{
@@ -892,27 +1057,78 @@ _dns_server_process_dns64_callback(struct dns_request *request, struct dns_reque
 			continue;
 		}
 
-		new_addr_map = malloc(sizeof(struct dns_ip_address));
-		if (new_addr_map == NULL) {
-			tlog(TLOG_ERROR, "malloc failed.\n");
-			pthread_mutex_unlock(&child_request->ip_map_lock);
-			return DNS_CHILD_POST_FAIL;
+		/* Check for dns64-rule */
+		struct dns_dns64_rule_item *rule_item = _dns_server_get_dns64_rule(request, addr_map->ip_addr);
+		if (rule_item != NULL) {
+			/* Use custom dns64-rule to generate IPv6 */
+			unsigned char generated_ipv6[DNS64_RULE_MAX_PREFIXES][DNS_RR_AAAA_LEN];
+			int ipv6_count = 0;
+
+			int ret = _dns_server_generate_dns64_rule_ipv6(request, addr_map->ip_addr, rule_item, generated_ipv6,
+			                                               &ipv6_count);
+			if (ret == 0) {
+				/* Add all generated IPv6 addresses to request->ip_map for speed check */
+				for (int i = 0; i < ipv6_count; i++) {
+					/* Check if this IPv6 address already exists in ip_map to avoid duplicate speed checks */
+					struct dns_ip_address *existing_ipv6 =
+						_dns_ip_address_get(request, generated_ipv6[i], DNS_T_AAAA);
+					if (existing_ipv6 != NULL) {
+						/* IPv6 already exists, skip adding */
+						continue;
+					}
+
+					struct dns_ip_address *new_ipv6_map = malloc(sizeof(struct dns_ip_address));
+					if (new_ipv6_map == NULL) {
+						tlog(TLOG_ERROR, "malloc failed.\n");
+						continue;
+					}
+					memset(new_ipv6_map, 0, sizeof(struct dns_ip_address));
+
+					new_ipv6_map->addr_type = DNS_T_AAAA;
+					memcpy(new_ipv6_map->ip_addr, generated_ipv6[i], DNS_RR_AAAA_LEN);
+					/* Set ping_time to -1 to trigger speed check */
+					new_ipv6_map->ping_time = -1;
+
+					key = jhash(new_ipv6_map->ip_addr, DNS_RR_AAAA_LEN, 0);
+					key = jhash(&new_ipv6_map->addr_type, sizeof(new_ipv6_map->addr_type), key);
+					pthread_mutex_lock(&request->ip_map_lock);
+					hash_add(request->ip_map, &new_ipv6_map->node, key);
+					pthread_mutex_unlock(&request->ip_map_lock);
+
+					has_generated_ipv6 = 1;
+				}
+			}
+		} else if (request->conf->dns_dns64.prefix_len > 0) {
+			/* Standard DNS64 processing - only if prefix is configured */
+			new_addr_map = malloc(sizeof(struct dns_ip_address));
+			if (new_addr_map == NULL) {
+				tlog(TLOG_ERROR, "malloc failed.\n");
+				pthread_mutex_unlock(&child_request->ip_map_lock);
+				return DNS_CHILD_POST_FAIL;
+			}
+			memset(new_addr_map, 0, sizeof(struct dns_ip_address));
+
+			new_addr_map->addr_type = DNS_T_AAAA;
+			addr_len = DNS_RR_AAAA_LEN;
+			memcpy(new_addr_map->ip_addr, request->conf->dns_dns64.prefix, 16);
+			memcpy(new_addr_map->ip_addr + 12, addr_map->ip_addr, 4);
+
+			new_addr_map->ping_time = addr_map->ping_time;
+			key = jhash(new_addr_map->ip_addr, addr_len, 0);
+			key = jhash(&new_addr_map->addr_type, sizeof(new_addr_map->addr_type), key);
+			pthread_mutex_lock(&request->ip_map_lock);
+			hash_add(request->ip_map, &new_addr_map->node, key);
+			pthread_mutex_unlock(&request->ip_map_lock);
 		}
-		memset(new_addr_map, 0, sizeof(struct dns_ip_address));
-
-		new_addr_map->addr_type = DNS_T_AAAA;
-		addr_len = DNS_RR_AAAA_LEN;
-		memcpy(new_addr_map->ip_addr, request->conf->dns_dns64.prefix, 16);
-		memcpy(new_addr_map->ip_addr + 12, addr_map->ip_addr, 4);
-
-		new_addr_map->ping_time = addr_map->ping_time;
-		key = jhash(new_addr_map->ip_addr, addr_len, 0);
-		key = jhash(&new_addr_map->addr_type, sizeof(new_addr_map->addr_type), key);
-		pthread_mutex_lock(&request->ip_map_lock);
-		hash_add(request->ip_map, &new_addr_map->node, key);
-		pthread_mutex_unlock(&request->ip_map_lock);
 	}
 	pthread_mutex_unlock(&child_request->ip_map_lock);
+
+	/* Trigger speed check for generated IPv6 addresses if dns64-rule was used */
+	if (has_generated_ipv6 && request->passthrough == 0) {
+		/* Reset has_ping_result to allow speed check for newly added IPv6 addresses */
+		request->has_ping_result = 0;
+		_dns_server_second_ping_check(request);
+	}
 
 	if (request->dualstack_selection == 1) {
 		return DNS_CHILD_POST_NO_RESPONSE;

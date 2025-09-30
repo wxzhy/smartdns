@@ -28,6 +28,8 @@ extern "C" {
 
 int _config_dns64(void *data, int argc, char *argv[]);
 
+int _config_dns64_rule(void *data, int argc, char *argv[]);
+
 #ifdef __cplusplus
 }
 #endif /*__cplusplus */

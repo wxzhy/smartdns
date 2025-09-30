@@ -371,6 +371,7 @@ struct dns_request {
 	int no_cache_cname;
 	int no_cache;
 	int no_ipalias;
+	int no_dns64_rule;
 
 	int has_cname_loop;
 

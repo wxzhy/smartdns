@@ -488,6 +488,10 @@ int _dns_server_pre_process_rule_flags(struct dns_request *request)
 		request->no_ipalias = 1;
 	}
 
+	if (flags & DOMAIN_FLAG_NO_DNS64_RULE) {
+		request->no_dns64_rule = 1;
+	}
+
 	if (flags & DOMAIN_FLAG_ADDR_IGN) {
 		/* ignore this domain */
 		goto skip_soa_out;
